@@ -70,6 +70,23 @@ if [[ "${FDTFILE}" == "meson-sm1-skyworth-lb2004-a4091.dtb" ]]; then
     log_message "Attempted to load btmtksdio module for Tencent-Aurora-3Pro."
 fi
 
+# For ZTE B860AV1.1-T (s905l) box: load Realtek RTL8189FTV SDIO WiFi driver
+if [[ "${FDTFILE}" == "meson-gxl-s905x-b860av11t.dtb" ]]; then
+    # The 8189fs driver is out-of-tree (absent from mainline/unifreq sources), so a
+    # prebuilt module is shipped here. Install it once if the kernel lacks it.
+    prebuilt_8189fs="/usr/local/lib/rtl8189fs/8189fs-$(uname -r).ko"
+    if ! modinfo 8189fs >/dev/null 2>&1 && [[ -f "${prebuilt_8189fs}" ]]; then
+        target_dir="/usr/lib/modules/$(uname -r)/kernel/drivers/net/wireless"
+        mkdir -p "${target_dir}"
+        cp -f "${prebuilt_8189fs}" "${target_dir}/8189fs.ko"
+        depmod -a >/dev/null 2>&1 || true
+        log_message "Installed prebuilt 8189fs module for kernel $(uname -r)."
+    fi
+    grep -q -x "8189fs" "${ophub_load_conf}" 2>/dev/null || echo "8189fs" >>"${ophub_load_conf}"
+    modprobe 8189fs >/dev/null 2>&1 || true
+    log_message "Attempted to load 8189fs (RTL8189FTV) module for ZTE B860AV1.1-T."
+fi
+
 # For swan1-w28(rk3568) board: USB power and switch control
 if [[ "${FDTFILE}" == "rk3568-swan1-w28.dtb" ]]; then
     (
