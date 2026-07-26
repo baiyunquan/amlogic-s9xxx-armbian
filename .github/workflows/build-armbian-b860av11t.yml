@@ -1,0 +1,245 @@
+#==========================================================================
+# Build Armbian for ZTE ZXV10 B860AV1.1-T (Amlogic s905l)
+#
+# Board       : s905l-b860av11t (model_database.conf id 901)
+# Device tree : meson-gxl-s905x-b860av11t.dtb
+# WLAN        : Realtek RTL8189FTV (SDIO) - out-of-tree rtl8189fs driver,
+#               absent from mainline/unifreq sources, so this workflow
+#               cross-builds it against the target kernel and bakes the
+#               module into the image.
+#
+# Runs on an arm64 runner so the module is built natively: the ophub kernel
+# header package ships prebuilt aarch64 scripts (fixdep/modpost), which an
+# x86_64 cross-build cannot execute.
+#
+# Refs: ophub/amlogic-s9xxx-armbian#640, #1631, #3193
+#==========================================================================
+
+name: Build Armbian for B860AV1.1-T
+
+on:
+  workflow_dispatch:
+    inputs:
+      armbian_url:
+        description: "Base Armbian image URL (blank = auto-detect latest)."
+        required: false
+        default: ""
+      armbian_release:
+        description: "Preferred OS release for the base rootfs."
+        required: false
+        default: "trixie"
+        type: choice
+        options:
+          - trixie
+          - bookworm
+          - resolute
+          - noble
+      armbian_kernel:
+        description: "Kernel version (must be a single pinned version)."
+        required: false
+        default: "6.6.144"
+      kernel_usage:
+        description: "Kernel release tag in ophub/kernel."
+        required: false
+        default: "stable"
+        type: choice
+        options:
+          - stable
+          - flippy
+          - beta
+      armbian_fstype:
+        description: "Rootfs type."
+        required: false
+        default: "ext4"
+        type: choice
+        options:
+          - ext4
+          - btrfs
+      rtl8189fs_repo:
+        description: "RTL8189FTV driver source repository."
+        required: false
+        default: "https://github.com/jwrdegoede/rtl8189ES_linux"
+      rtl8189fs_branch:
+        description: "Driver branch (rtl8189fs is required; 8189es will not drive 8189FTV)."
+        required: false
+        default: "rtl8189fs"
+
+env:
+  TZ: Asia/Shanghai
+  ARMBIAN_BOARD: s905l-b860av11t
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    if: ${{ github.event.repository.owner.id == github.event.sender.id }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Initialize the build environment
+        id: init
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          docker rmi -f $(docker images -q) 2>/dev/null || true
+          [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
+          sudo swapoff -a
+          sudo rm -f /swapfile /mnt/swapfile
+          sudo apt-get -y update
+          sudo apt-get -y install $(curl -fsSL https://ophub.org/ubuntu2404-build-armbian-depends)
+          # Toolchain for the out-of-tree kernel module
+          sudo apt-get -y install build-essential bc bison flex libssl-dev libelf-dev
+          sudo apt-get -y autoremove --purge
+          sudo apt-get clean
+          sudo timedatectl set-timezone "${TZ}"
+          echo "status=success" >> ${GITHUB_OUTPUT}
+
+      - name: Create virtual disk for extended storage
+        id: disk
+        run: |
+          root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
+          root_size=$(( root_avail - 4 ))
+          [[ "${root_size}" -gt 0 ]] || { echo "Error: Insufficient space on /: ${root_avail}G"; exit 1; }
+
+          sudo truncate -s "${root_size}"G /root.img
+          build_dev=$(sudo losetup --find --show /root.img)
+          sudo mkfs.xfs -f -i sparse=0 -b size=4096 "${build_dev}"
+          sudo mkdir -p /builder
+          sudo mount "${build_dev}" /builder
+          sudo chown -R runner:runner /builder
+          df -Th
+          echo "status=success" >> ${GITHUB_OUTPUT}
+
+      - name: Build the RTL8189FTV (8189fs) kernel module
+        id: driver
+        if: ${{ steps.disk.outputs.status == 'success' && !cancelled() }}
+        working-directory: /builder
+        run: |
+          set -euo pipefail
+          kver="${{ inputs.armbian_kernel }}"
+          # A single pinned version is required: the module's vermagic must match
+          # the kernel that ends up in the image, so ranges like 6.6.y won't do.
+          [[ "${kver}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "Error: armbian_kernel must be a pinned version like 6.6.144, got [ ${kver} ]"; exit 1; }
+
+          tag="kernel_${{ inputs.kernel_usage }}"
+          url="https://github.com/ophub/kernel/releases/download/${tag}/${kver}.tar.gz"
+          echo "Downloading kernel package: ${url}"
+          curl -fsSL -o "kernel.tar.gz" "${url}"
+          tar -xzf kernel.tar.gz
+
+          # Resolve the real kernel release string, e.g. 6.6.144-ophub
+          hdr_pkg="$(ls ${kver}/header-*.tar.gz | head -n1)"
+          krel="$(basename "${hdr_pkg}" .tar.gz)"; krel="${krel#header-}"
+          echo "Kernel release: ${krel}"
+
+          mkdir -p kbuild && tar -xzf "${hdr_pkg}" -C kbuild
+          # The header package omits .config; take it from the boot package.
+          tar -xzf "${kver}"/boot-*.tar.gz -C "${kver}" "config-${krel}"
+          cp -f "${kver}/config-${krel}" kbuild/.config
+
+          git clone -q --depth 1 -b "${{ inputs.rtl8189fs_branch }}" "${{ inputs.rtl8189fs_repo }}" driver
+          cd driver
+          echo "Driver source: $(git rev-parse --short HEAD) (branch ${{ inputs.rtl8189fs_branch }})"
+
+          # Native aarch64 build against the target kernel headers
+          make -j"$(nproc)" ARCH=arm64 KSRC=/builder/kbuild
+
+          [[ -f 8189fs.ko ]] || { echo "Error: 8189fs.ko was not produced"; exit 1; }
+          modinfo 8189fs.ko | head -n 12
+
+          # Verify the module targets the intended kernel
+          mod_vermagic="$(modinfo -F vermagic 8189fs.ko | awk '{print $1}')"
+          [[ "${mod_vermagic}" == "${krel}" ]] || {
+              echo "Error: vermagic [ ${mod_vermagic} ] != kernel release [ ${krel} ]"; exit 1; }
+
+          # Stage as a rootfs overlay; start_service.sh installs it on first boot.
+          stage="/builder/custom-files/usr/local/lib/rtl8189fs"
+          mkdir -p "${stage}"
+          cp -f 8189fs.ko "${stage}/8189fs-${krel}.ko"
+          ls -lh "${stage}"
+          echo "KERNEL_RELEASE=${krel}" >> ${GITHUB_ENV}
+          echo "status=success" >> ${GITHUB_OUTPUT}
+
+      - name: Set the Armbian base image source
+        id: down
+        if: ${{ steps.driver.outputs.status == 'success' && !cancelled() }}
+        working-directory: /builder
+        run: |
+          set -euo pipefail
+          # Only the rootfs of the base image is reused; its kernel is replaced by
+          # the pinned one below, so the base kernel version does not matter.
+          armbian_url="${{ inputs.armbian_url }}"
+          if [[ -z "${armbian_url}" ]]; then
+              armbian_site="https://armbian.tnahosting.net/dl/odroidn2/archive/"
+              listing="$(curl -fsS --max-time 60 "${armbian_site}")"
+              armbian_file=""
+              # Preference order; the upstream mirror rotates releases, so do not
+              # hardcode a single one (it silently stops matching).
+              for r in ${{ inputs.armbian_release }} trixie bookworm resolute noble; do
+                  armbian_file="$(grep -oE "Armbian[^\"'>]*_${r}_[^\"'>]*minimal\.img\.xz" <<<"${listing}" | sort -u | head -n1)"
+                  [[ -n "${armbian_file}" ]] && break
+              done
+              if [[ -z "${armbian_file}" ]]; then
+                  echo "Error: no suitable Armbian minimal image at [ ${armbian_site} ]. Available:"
+                  grep -oE "Armbian[^\"'>]*\.img\.xz" <<<"${listing}" | sort -u | sed 's/^/  /'
+                  echo "Pass an explicit URL via the armbian_url input."
+                  exit 1
+              fi
+              armbian_url="${armbian_site}${armbian_file}"
+          fi
+          echo "ARMBIAN_URL=${armbian_url}" >> ${GITHUB_ENV}
+          echo "Base image: ${armbian_url}"
+
+          set_release=""
+          for r in resolute noble trixie bookworm; do
+              [[ "${armbian_url}" == *"${r}"* ]] && { set_release="_${r}"; break; }
+          done
+
+          # The action is used locally (uses: ./) so that this fork's device tree
+          # and armbian-files customizations are the ones applied.
+          mkdir -p /builder/build
+          ln -sf /builder/build ${{ github.workspace }}/build
+
+          echo "build_tag=Armbian${set_release}_b860av11t_$(date +"%Y.%m")" >> ${GITHUB_ENV}
+          echo "status=success" >> ${GITHUB_OUTPUT}
+
+      - name: Rebuild Armbian for B860AV1.1-T
+        uses: ./
+        if: ${{ steps.down.outputs.status == 'success' && env.ARMBIAN_URL != '' && !cancelled() }}
+        with:
+          build_target: armbian
+          armbian_path: ${{ env.ARMBIAN_URL }}
+          armbian_board: ${{ env.ARMBIAN_BOARD }}
+          armbian_kernel: ${{ inputs.armbian_kernel }}
+          auto_kernel: false
+          kernel_usage: ${{ inputs.kernel_usage }}
+          armbian_fstype: ${{ inputs.armbian_fstype }}
+          armbian_files: /builder/custom-files
+          builder_name: ${{ github.actor }}
+
+      - name: Upload Armbian image to Release
+        uses: ophub/upload-to-releases@main
+        if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
+        with:
+          tag: ${{ env.build_tag }}
+          artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
+          allow_updates: true
+          remove_artifacts: false
+          replaces_artifacts: true
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            Armbian for ZTE ZXV10 B860AV1.1-T (Amlogic s905l)
+
+            - Board: `${{ env.ARMBIAN_BOARD }}`
+            - Device tree: `meson-gxl-s905x-b860av11t.dtb`
+            - Kernel: `${{ env.KERNEL_RELEASE }}`
+            - WLAN: RTL8189FTV, `8189fs` module prebuilt and auto-loaded on first boot
+
+            Boots from USB flash drive / SD card. Requires a root+TWRP Android base
+            ROM in NAND to chainload it; the rootfs cannot live in NAND because
+            mainline Linux has no driver for the Amlogic/Micron NFTL layer.
