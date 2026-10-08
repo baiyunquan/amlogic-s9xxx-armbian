@@ -1,0 +1,12 @@
+[Unit]
+Description=Generate fresh SSH host keys for the YZD-S18 image
+After=local-fs.target
+Before=ssh.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

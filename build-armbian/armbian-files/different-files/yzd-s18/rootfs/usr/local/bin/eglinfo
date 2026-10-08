@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Mali-compatible GBM input for Mesa eglinfo; retain the packaged utility.
+set -euo pipefail
+if [[ -e /sys/firmware/devicetree/base/yzd-s18,display-profile ]] && \
+   python3 -c 'import json,sys; sys.exit(0 if json.load(open("/var/lib/yzd-s18-graphics/state.json"))["phase"]=="active" else 1)' 2>/dev/null; then
+    if [[ "$#" -gt 0 ]]; then
+        if [[ "$1" == --gbm-device ]]; then exec /opt/yzd-s18/eglinfo-gbm "$@"; fi
+    else
+        for path in /sys/class/drm/card[0-9]*; do
+            name="${path##*/}"
+            [[ "$name" =~ ^card[0-9]+$ ]] || continue
+            if [[ "$(readlink -f "$path/device/driver/module")" == /sys/module/aml_drm ]]; then
+                exec /opt/yzd-s18/eglinfo-gbm --gbm-device "/dev/dri/$name"
+            fi
+        done
+    fi
+fi
+exec /usr/bin/eglinfo "$@"

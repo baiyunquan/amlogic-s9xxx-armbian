@@ -1,0 +1,15 @@
+amlogic-gpio
+amlogic-pinctrl-soc-g12a
+amlogic-clk
+amlogic-clk-soc-g12a
+amlogic-aoclk-g12a
+amlogic-pwm
+amlogic-reset
+amlogic-rng
+amlogic-power
+amlogic-usb
+amlogic-mmc
+dwmac-meson8b
+stmmac
+usb-storage
+uas

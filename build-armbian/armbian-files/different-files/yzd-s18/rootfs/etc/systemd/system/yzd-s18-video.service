@@ -1,0 +1,23 @@
+[Unit]
+Description=YZD-S18 nonsecure V4L2 H264 HEVC decoder preparation
+Requires=yzd-s18-display.service
+After=yzd-s18-display.service
+Before=multi-user.target
+ConditionKernelCommandLine=yzd_s18.video=1
+ConditionPathExists=/sys/firmware/devicetree/base/yzd-s18,video-profile
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/test -s /lib/firmware/video/video_ucode.bin
+ExecStart=/sbin/modprobe firmware
+ExecStart=/sbin/modprobe decoder_common
+ExecStart=/sbin/modprobe stream_input
+ExecStart=/sbin/modprobe amvdec_mh264_v4l
+ExecStart=/sbin/modprobe amvdec_h265_v4l
+ExecStart=/sbin/modprobe amvdec_ports multiplanar=1 bypass_vpp=1 enable_drm_mode=0
+ExecStart=/usr/bin/python3 /opt/yzd-s18/video/yzd_s18_video.py _ready
+RemainAfterExit=yes
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=Expand only the verified YZD-S18 USB root partition
+After=local-fs.target
+Before=multi-user.target
+ConditionPathExists=!/var/lib/yzd-s18/root-expanded
+ConditionPathExists=/etc/yzd-s18/image.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/yzd-s18/grow-root.py
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

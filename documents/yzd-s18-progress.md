@@ -11,3 +11,13 @@ Base commit: 7d81e344. Work on main was explicitly requested.
   platform/common overlay, instead of applying vendor assumptions to all boards.
   This avoids altering existing board builds and permits read-only base input.
 - Safety RED: missing cleanup helper detected by busy-mount regression.
+- Task 1 complete: f6be0b9b, busy mount/data-preservation test passed on a real loop filesystem.
+- Inputs packaged: 61 MiB kernel, 218 MiB exact source snapshot, 29 MiB vendor
+  runtime; all 1512 module architectures/vermagic and video DTS/CMA checked.
+- Input/boot RED to GREEN: rejects tampered assets and unsafe tar paths;
+  failed loads or invalid FDT never boot; device index 2 works.
+- Ruling: package precompiled payload as yzd-s18-kernel with no generic kernel
+  hooks, remove the base kernel through apt, and generate initramfs explicitly
+  inside final Bookworm rootfs. This keeps dpkg consistent and one kernel ABI.
+- Ruling: disable the generic armbian-fix first-boot cleanup/resize entrypoint
+  in this profile. Dedicated SSH identity and guarded USB resize services replace it.

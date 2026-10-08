@@ -1,4 +1,10 @@
 #!/bin/bash
+# Dedicated vendor path: the generic mainline repacker must not replace this ABI.
+for yzd_arg in "$@"; do
+    if [[ "$yzd_arg" == --custom-kernel-bundle ]]; then
+        exec bash "$(cd "$(dirname "$0")" && pwd)/scripts/yzd-s18/build-image.sh" "$@"
+    fi
+done
 #================================================================================================
 #
 # This file is licensed under the terms of the GNU General Public

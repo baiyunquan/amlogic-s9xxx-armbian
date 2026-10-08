@@ -1,0 +1,18 @@
+[Unit]
+Description=YZD-S18 display DMA heap and DRM modules
+After=systemd-modules-load.service
+Before=multi-user.target
+ConditionKernelCommandLine=yzd_s18.display=1
+ConditionPathExists=/sys/firmware/devicetree/base/yzd-s18,display-profile
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/modprobe system_heap
+ExecStart=/sbin/modprobe mali_kbase
+ExecStart=/sbin/modprobe aml_drm
+ExecStart=/usr/bin/test -c /dev/dma_heap/system-uncached
+RemainAfterExit=yes
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
