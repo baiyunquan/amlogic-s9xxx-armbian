@@ -44,3 +44,21 @@ Base commit: 7d81e344. Work on main was explicitly requested.
   orphan_file is absent. See yzd-s18-download-verification.json.
 - Status: image construction and offline checks complete. New-image boot,
   four cores, SSH, native JMicron UAS, GPU/VPU and HDMI playback acceptance pending.
+- 实机复核 2026-10-08：SSH 进入 `yzd-s18`，运行
+  `5.15.137-yzd-s18-usbfix`；4 核在线、内存 3.4 GiB，根分区为 USB
+  `/dev/sdb2`，UUID 与 image.json 一致，千兆以太网 1000Mb/s 全双工。
+- JMicron JMS567 位于 USB 3 SuperSpeed，`lsusb -t` 明确显示
+  `Driver=uas`，对应 `/dev/sda`；只读 32 MiB 读取成功（106 MB/s），复核后无
+  UAS reset、timeout 或 I/O error。
+- `/dev/mali0` 和 Meson `/dev/dri/card0` 已注册。EGL GBM vendor=ARM、
+  GLES3.2 Mali-G31；GLES smoke 像素校验和 Vulkan logical-device/queue smoke
+  均通过。固定 ICD 的 OpenCL smoke 枚举 Mali-G31，100×1048576 整数校验通过。
+  裸 `clinfo` 没有 vendor 目录而显示 0 平台，项目入口会显式使用固定 Mali ICD。
+- HDMI-A-1 当前 connected，读取到 256-byte EDID 和 11 个模式，preferred
+  模式为 1080p60。DRM glmark2 子基准完整结束，Mali-G31 在 2560x1440 输出下
+  得分 147；默认完整套件在无独立 VT 的 SSH 会话中被保护超时/恢复 CRTC 报
+  `-2`，不作为完整套件成绩交付。
+- `/dev/video26` 驱动为 `aml-vcodec-dec`，具备 multiplanar/streaming，输入
+  同时列出 H264 与 HEVC。H.264 和 H.265 样例均以厂商 V4L2 解码器完成 300 帧。
+  未发现 panic、Oops、lockup、GPU reset、UAS 错误或 DRM timeout；保留启动时
+  的 eMMC/温控/`osd_axi_sel` 兼容性警告作为非阻断日志。
