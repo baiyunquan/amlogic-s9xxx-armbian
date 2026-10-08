@@ -1,5 +1,6 @@
 !.gitignore
 /build
+__pycache__/
 /tmp_dir
 /build-armbian/kernel
 /build-armbian/u-boot

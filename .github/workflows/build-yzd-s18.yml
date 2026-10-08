@@ -1,0 +1,69 @@
+name: Build YZD-S18 Bookworm vendor image
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish verified image as a prerelease
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: yzd-s18-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3 rsync parted gdisk             dosfstools e2fsprogs u-boot-tools device-tree-compiler kmod util-linux gzip gh
+          df -h .
+      - name: Run regressions including real busy loop cleanup
+        run: sudo python3 -m unittest discover -s tests -v
+      - name: Download locked inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(python3 -c 'import json; print(json.load(open("scripts/yzd-s18/inputs.lock.json"))["release_tag"])')"
+          mkdir -p build/yzd-s18-inputs
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir build/yzd-s18-inputs
+          python3 scripts/yzd-s18/inputs.py verify build/yzd-s18-inputs scripts/yzd-s18/inputs.lock.json
+      - name: Construct and validate image
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$(python3 -c 'import json; print(json.load(open("scripts/yzd-s18/inputs.lock.json"))["kernel_bundle"])')"
+          sudo ./rebuild -b yzd-s18 --custom-kernel-bundle "build/yzd-s18-inputs/$bundle"             --yzd-inputs-dir build/yzd-s18-inputs --output build/output/yzd-s18             2>&1 | tee build/yzd-s18-build.log
+      - name: Preserve validation and failure logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: yzd-s18-image-and-reports
+          path: |
+            build/output/yzd-s18/*
+            build/yzd-s18-build.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Publish verified image
+        if: success() && inputs.publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=build/output/yzd-s18
+          python3 -c 'import json; assert json.load(open("build/output/yzd-s18/validation.json"))["status"]=="offline-validation-passed"'
+          (cd "$out"; sha256sum -c ./*.img.gz.sha256)
+          tag="yzd-s18-bookworm-$(date -u +%Y%m%d)-${GITHUB_SHA:0:8}-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" "$out"/* --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --prerelease --title "YZD-S18 Bookworm / Khadas 5.15" \
+            --notes "USB server image: Khadas 5.15.137-yzd-s18-usbfix, Mali r44p0, vendor V4L2 H.264/H.265 and KMS playback. Offline image validation passed. Hardware boot, UAS and video acceptance remain pending. See documents/yzd-s18.md at this build commit."
