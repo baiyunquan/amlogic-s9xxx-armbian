@@ -23,13 +23,15 @@ log() {
 
 declare -A root_disks=()
 collect_root_disks() {
-    local source name
-    while read -r source; do
-        [[ "$source" == /dev/* ]] || continue
-        while read -r name; do
-            [[ -n "$name" ]] && root_disks["$name"]=1
-        done < <(lsblk -sno NAME "$source" 2>/dev/null || true)
-    done < <(findmnt -rn -o SOURCE / /boot /boot/firmware 2>/dev/null || true)
+    local target source name
+    for target in / /boot /boot/firmware; do
+        while read -r source; do
+            [[ "$source" == /dev/* ]] || continue
+            while read -r name; do
+                [[ -n "$name" ]] && root_disks["$name"]=1
+            done < <(lsblk -sno KNAME "$source" 2>/dev/null || true)
+        done < <(findmnt -rn -o SOURCE --target "$target" 2>/dev/null || true)
+    done
 }
 
 candidate_disks() {

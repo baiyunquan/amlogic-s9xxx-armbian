@@ -16,7 +16,7 @@ class DiskPowerTests(unittest.TestCase):
         self.assertTrue(SCRIPT.is_file())
         self.assertIn("hdparm -S", SCRIPT.read_text())
         self.assertIn("hdparm -y", SCRIPT.read_text())
-        self.assertIn("lsblk -sno NAME", SCRIPT.read_text())
+        self.assertIn("lsblk -sno KNAME", SCRIPT.read_text())
         self.assertIn("After=umount.target", PARK_SERVICE.read_text())
         self.assertIn("WantedBy=poweroff.target reboot.target halt.target", PARK_SERVICE.read_text())
         self.assertIn("WantedBy=multi-user.target", BOOT_SERVICE.read_text())
@@ -27,7 +27,7 @@ class DiskPowerTests(unittest.TestCase):
             fake.mkdir()
             log = Path(tmp) / "hdparm.log"
             (fake / "findmnt").write_text(
-                "#!/bin/sh\nprintf '%s\\n' /dev/sdb2 /dev/sdb1\n"
+                "#!/bin/sh\ncase \"$5\" in /boot) echo /dev/sdb1 ;; *) echo /dev/sdb2 ;; esac\n"
             )
             (fake / "lsblk").write_text(
                 """#!/bin/sh
@@ -55,6 +55,7 @@ fi
             applied = subprocess.run(["/bin/bash", str(SCRIPT), "apply"], env=env, capture_output=True, text=True)
             self.assertEqual(applied.returncode, 0, applied.stderr)
             self.assertEqual(log.read_text().splitlines(), ["-S 120 /dev/sda"])
+            self.assertIn("skip root/boot disk /dev/sdb", applied.stderr)
             log.unlink()
             parked = subprocess.run(["/bin/bash", str(SCRIPT), "park"], env=env, capture_output=True, text=True)
             self.assertEqual(parked.returncode, 0, parked.stderr)
