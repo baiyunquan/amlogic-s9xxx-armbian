@@ -53,6 +53,17 @@ def rootfs(root):
     assert identity["kernel_release"]==RELEASE
     assert len(list((root/"usr/lib/modules").iterdir()))==1
     assert (root/"root/.no_rootfs_resize").read_text().strip()=="no"
+    disk_power = root/"usr/local/sbin/yzd-s18-disk-power"
+    assert disk_power.is_file() and disk_power.stat().st_mode & 0o111
+    disk_policy = (root/"etc/default/yzd-s18-disk-power").read_text()
+    assert "YZD_DISK_POWER_STANDBY_UNITS=120" in disk_policy
+    disk_service = (root/"etc/systemd/system/yzd-s18-disk-power.service").read_text()
+    park_service = (root/"etc/systemd/system/yzd-s18-disk-park.service").read_text()
+    assert "ExecStart=/usr/local/sbin/yzd-s18-disk-power apply" in disk_service
+    assert "ExecStart=/usr/local/sbin/yzd-s18-disk-power park" in park_service
+    assert "After=umount.target" in park_service
+    packages = (root/"var/lib/yzd-s18/packages.tsv").read_text()
+    assert any(line.startswith("hdparm\t") for line in packages.splitlines())
     headers=root/f"usr/src/linux-headers-{RELEASE}"
     for helper in ("scripts/basic/fixdep","scripts/mod/modpost"):
         with (headers/helper).open("rb") as f:
@@ -97,7 +108,10 @@ def rootfs(root):
         import hashlib
         assert hashlib.file_digest(f,"sha256").hexdigest()==payload
     assert not (root/"var/lib/yzd-s18/dpkg-audit.txt").read_text()
-    return {"status":"offline-validation-passed","hardware_acceptance":"pending","identity":identity,
+    return {"status":"offline-validation-passed","hardware_acceptance":"pending",
+            "disk_power":{"standby_seconds":600,"boot_policy":"hdparm -S 120",
+                           "shutdown_policy":"hdparm -y","root_disk_excluded":True},
+            "identity":identity,
             "initramfs_sha256":payload,"media_sha256":media,
             "packages":(root/"var/lib/yzd-s18/packages.tsv").read_text().splitlines()}
 

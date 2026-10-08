@@ -20,7 +20,7 @@ if (( ${#old[@]} )); then
     apt-mark unhold "${old[@]}"
     apt-get -y purge "${old[@]}"
 fi
-packages=(initramfs-tools e2fsprogs u-boot-tools kmod python3 openssh-server network-manager
+packages=(initramfs-tools e2fsprogs u-boot-tools kmod hdparm python3 openssh-server network-manager
     rsync cloud-guest-utils parted util-linux kbd ffmpeg libsdl2-2.0-0 v4l-utils
     mesa-utils mesa-utils-bin glmark2-es2-drm libdrm-tests libvulkan1 vulkan-tools
     clinfo ocl-icd-libopencl1 ocl-icd-opencl-dev opencl-headers
@@ -98,6 +98,7 @@ gcc -std=c11 -O2 -Wall -Wextra -Werror /opt/yzd-s18/opencl_smoke.c -lOpenCL -o /
 gcc -std=c11 -O2 -Wall -Wextra -Werror /opt/yzd-s18/graphics_smoke.c -lEGL -lGLESv2 -lgbm -lvulkan -o /opt/yzd-s18/graphics_smoke
 gcc -std=c11 -O2 -Wall -Wextra -Werror /opt/yzd-s18/eglinfo_gbm.c -lEGL -lgbm -o /opt/yzd-s18/eglinfo-gbm
 chmod 755 /opt/yzd-s18/*.sh /opt/yzd-s18/graphics_runtime.py /opt/yzd-s18/video/yzd_s18_video.py /usr/local/bin/eglinfo
+chmod 755 /usr/local/sbin/yzd-s18-disk-power
 ln -s /opt/yzd-s18/video/yzd_s18_video.py /usr/local/bin/yzd-s18-video
 ln -s /opt/yzd-s18/graphics_runtime.py /usr/local/bin/yzd-s18-graphics
 # Prevent vendor-incompatible update/install entrypoints, including future dpkg upgrades.
@@ -144,9 +145,9 @@ ln -sfn usr/sbin /sbin
 printf 'no\n' > /root/.no_rootfs_resize
 # ttyAML0 belongs to the mainline baseline, not this vendor UART.
 rm -f /etc/systemd/system/getty.target.wants/serial-getty@ttyAML0.service
-systemctl --root=/ enable ssh NetworkManager yzd-s18-display yzd-s18-video yzd-s18-grow-root yzd-s18-identity
+systemctl --root=/ enable ssh NetworkManager yzd-s18-display yzd-s18-video yzd-s18-grow-root yzd-s18-identity yzd-s18-disk-power yzd-s18-disk-park
 systemctl --root=/ mask armbian-resize-filesystem.service
-systemd-analyze verify /etc/systemd/system/yzd-s18-{display,video,grow-root}.service
+systemd-analyze verify /etc/systemd/system/yzd-s18-{display,video,grow-root,disk-power,disk-park}.service
 printf 'yzd-s18\n' > /etc/hostname
 install -d /etc/profile.d
 printf 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' > /etc/profile.d/yzd-s18-path.sh

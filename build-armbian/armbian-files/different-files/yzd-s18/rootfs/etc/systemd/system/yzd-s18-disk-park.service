@@ -1,0 +1,15 @@
+[Unit]
+Description=Park YZD-S18 data disks before poweroff or reboot
+DefaultDependencies=no
+Wants=umount.target
+After=umount.target
+Before=poweroff.target reboot.target halt.target
+ConditionPathExists=/usr/local/sbin/yzd-s18-disk-power
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/yzd-s18-disk-power park
+TimeoutStartSec=30s
+
+[Install]
+WantedBy=poweroff.target reboot.target halt.target

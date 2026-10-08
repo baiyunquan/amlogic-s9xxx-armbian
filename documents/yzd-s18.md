@@ -88,6 +88,25 @@ amvdec_mh264_v4l/amvdec_h265_v4l/amvdec_ports. Parameters are multiplanar=1,
 bypass_vpp=1, enable_drm_mode=0. Hardware decoder identity is aml-vcodec-dec;
 a v4lvideo node does not count as a decoder.
 
+The image also includes `hdparm`-based protection for an attached data HDD. At
+multi-user startup, `yzd-s18-disk-power.service` selects only non-root,
+non-removable rotational disks and applies `hdparm -S 120`, which is a
+600-second (10-minute) idle standby timeout. It never applies the policy to the
+USB root/boot disk. On poweroff, halt, or reboot,
+`yzd-s18-disk-park.service` runs after `umount.target` and requests immediate
+standby with `hdparm -y`; a bridge that does not pass ATA standby is logged and
+does not block shutdown. Inspect the selection with:
+
+```sh
+yzd-s18-disk-power status
+journalctl -u yzd-s18-disk-power -u yzd-s18-disk-park
+```
+
+The timeout is recorded in `/etc/default/yzd-s18-disk-power` as
+`YZD_DISK_POWER_STANDBY_UNITS=120`. Because this is a runtime ATA policy, it is
+reapplied on each boot; the drive firmware and the JMicron bridge still decide
+whether the command is supported and whether heads physically park.
+
 ```sh
 uname -r
 cat /etc/yzd-s18/image.json

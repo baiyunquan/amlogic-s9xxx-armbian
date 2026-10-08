@@ -1,0 +1,3 @@
+# YZD-S18 data-disk power policy.
+# hdparm -S uses five-second units for values 1..240: 120 == 600 seconds.
+YZD_DISK_POWER_STANDBY_UNITS=120

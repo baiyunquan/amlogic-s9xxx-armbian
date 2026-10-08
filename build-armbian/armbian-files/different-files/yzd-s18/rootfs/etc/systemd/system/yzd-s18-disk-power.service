@@ -1,0 +1,14 @@
+[Unit]
+Description=Set YZD-S18 data-disk idle standby policy
+Wants=systemd-udev-settle.service
+After=local-fs.target systemd-udev-settle.service
+Before=multi-user.target
+ConditionPathExists=/usr/local/sbin/yzd-s18-disk-power
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/yzd-s18-disk-power apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -110,7 +110,7 @@ for script in s905_autoscript boot.scr aml_autoscript; do
     mkimage -A arm64 -O linux -T script -C none -n 'YZD-S18 USB boot' -d "$REPO/scripts/yzd-s18/boot.cmd" "$root/boot/$script"
 done
 cp "$REPO/scripts/yzd-s18/boot.cmd" "$root/boot/yzd-s18-boot.cmd"
-chroot "$root" /bin/bash -ec '/sbin/init --version; /sbin/fsck.ext4 -V; dpkg --audit; /opt/yzd-s18/video/ffmpeg-5.1.9/bin/ffmpeg -version; python3 /opt/yzd-s18/graphics_runtime.py status' > "$OUTPUT/chroot-checks.txt" 2>&1
+chroot "$root" /bin/bash -ec '/sbin/init --version; /sbin/fsck.ext4 -V; /usr/sbin/hdparm -V; dpkg --audit; /opt/yzd-s18/video/ffmpeg-5.1.9/bin/ffmpeg -version; python3 /opt/yzd-s18/graphics_runtime.py status' > "$OUTPUT/chroot-checks.txt" 2>&1
 python3 "$REPO/scripts/yzd-s18/verify.py" root "$root" --report "$OUTPUT/validation.json"
 cp "$root/etc/yzd-s18/image.json" "$OUTPUT/image.json"
 cp "$root/opt/yzd-build-inputs/kernel/build-manifest.txt" "$OUTPUT/kernel-build-manifest.txt"

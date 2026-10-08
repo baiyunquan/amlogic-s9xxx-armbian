@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Manage only non-root, non-removable rotational disks. The USB system disk is
+# deliberately excluded even when it is itself rotational.
+config=/etc/default/yzd-s18-disk-power
+if [[ -r "$config" ]]; then
+    # shellcheck disable=SC1090
+    . "$config"
+fi
+units="${YZD_DISK_POWER_STANDBY_UNITS:-120}"
+if ! [[ "$units" =~ ^[1-9][0-9]*$ ]] || (( units > 240 )); then
+    units=120
+fi
+
+log() {
+    local message="$*"
+    printf 'yzd-s18-disk-power: %s\n' "$message" >&2
+    if command -v logger >/dev/null 2>&1; then
+        logger -t yzd-s18-disk-power -- "$message" || true
+    fi
+}
+
+declare -A root_disks=()
+collect_root_disks() {
+    local source name
+    while read -r source; do
+        [[ "$source" == /dev/* ]] || continue
+        while read -r name; do
+            [[ -n "$name" ]] && root_disks["$name"]=1
+        done < <(lsblk -sno NAME "$source" 2>/dev/null || true)
+    done < <(findmnt -rn -o SOURCE / /boot /boot/firmware 2>/dev/null || true)
+}
+
+candidate_disks() {
+    local name type rotational removable transport
+    while read -r name type rotational removable transport; do
+        [[ "$type" == disk && "$rotational" == 1 && "$removable" == 0 ]] || continue
+        if [[ ${root_disks["$name"]+present} ]]; then
+            log "skip root/boot disk /dev/$name"
+            continue
+        fi
+        printf '/dev/%s\n' "$name"
+    done < <(lsblk -dn -o NAME,TYPE,ROTA,RM,TRAN 2>/dev/null || true)
+}
+
+apply_policy() {
+    local dev found=0 output
+    command -v hdparm >/dev/null 2>&1 || { log 'hdparm is unavailable; no disk policy applied'; return 0; }
+    collect_root_disks
+    while read -r dev; do
+        found=1
+        if output=$(hdparm -S "$units" "$dev" 2>&1); then
+            log "configured $dev for standby after $((units * 5)) seconds: $output"
+        else
+            log "could not configure $dev (bridge may not pass ATA standby): $output"
+        fi
+    done < <(candidate_disks)
+    (( found )) || log 'no non-root rotational data disk found'
+}
+
+park_disks() {
+    local dev found=0 output
+    command -v hdparm >/dev/null 2>&1 || { log 'hdparm is unavailable; no disk parked'; return 0; }
+    collect_root_disks
+    sync
+    while read -r dev; do
+        found=1
+        if output=$(hdparm -y "$dev" 2>&1); then
+            log "requested immediate standby for $dev: $output"
+        else
+            log "could not park $dev (bridge may not pass ATA standby): $output"
+        fi
+    done < <(candidate_disks)
+    (( found )) || log 'no non-root rotational data disk found to park'
+}
+
+status() {
+    local dev output
+    collect_root_disks
+    while read -r dev; do
+        if output=$(hdparm -C "$dev" 2>&1); then
+            printf '%s %s\n' "$dev" "$output"
+        else
+            printf '%s status-unavailable: %s\n' "$dev" "$output"
+        fi
+    done < <(candidate_disks)
+}
+
+case "${1:-}" in
+    apply) apply_policy ;;
+    park) park_disks ;;
+    status) status ;;
+    *) echo "usage: $0 {apply|park|status}" >&2; exit 2 ;;
+esac
