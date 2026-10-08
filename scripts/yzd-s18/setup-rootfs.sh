@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export LC_ALL=C.UTF-8
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 release=5.15.137-yzd-s18-usbfix
 kernel=/opt/yzd-build-inputs/kernel
 vendor=/opt/yzd-build-inputs/vendor
@@ -23,7 +24,7 @@ packages=(initramfs-tools e2fsprogs u-boot-tools kmod python3 openssh-server net
     rsync cloud-guest-utils parted util-linux kbd ffmpeg libsdl2-2.0-0 v4l-utils
     mesa-utils mesa-utils-bin glmark2-es2-drm libdrm-tests libvulkan1 vulkan-tools
     clinfo ocl-icd-libopencl1 ocl-icd-opencl-dev opencl-headers
-    build-essential pkg-config libegl-dev libgles-dev libgbm-dev libvulkan-dev
+    build-essential flex bison libssl-dev libelf-dev pkg-config libegl-dev libgles-dev libgbm-dev libvulkan-dev
     libwayland-client0 libwayland-server0 libwayland-egl1 libdrm2)
 apt-get update
 apt-get -s --no-install-recommends install "${packages[@]}" > /var/lib/yzd-s18/packages-simulation.txt
@@ -33,6 +34,33 @@ mkdir -p "$stage/DEBIAN" "$stage/boot/dtb/amlogic" "$stage/usr/lib/modules" "$st
 cp -a "$kernel/modules" "$stage/usr/lib/modules/$release"
 dpkg-deb -x "$kernel/headers.deb" /var/tmp/yzd-build/header-extract
 cp -a /var/tmp/yzd-build/header-extract/usr/src/. "$stage/usr/src/"
+headers="$stage/usr/src/linux-headers-$release"
+# The cross-built header package intentionally omitted host executables. Generate
+# them with the native Bookworm compiler before packing the installed headers.
+cat > /var/tmp/yzd-build/header-helpers.mk <<'HELPERS'
+.PHONY: yzd_headers_prepare
+yzd_headers_prepare: scripts_basic
+	$(MAKE) $(build)=scripts
+	$(MAKE) $(build)=scripts/mod
+HELPERS
+# External-module mode preserves the exact generated kernel configuration; the
+# headers omit vendor Kconfig sources and must never run syncconfig here.
+make -C "$headers" -f Makefile -f /var/tmp/yzd-build/header-helpers.mk ARCH=arm64 CROSS_COMPILE= M=/var/tmp/yzd-build/header-smoke yzd_headers_prepare
+test -x "$headers/scripts/basic/fixdep"
+test -x "$headers/scripts/mod/modpost"
+mkdir -p /var/tmp/yzd-build/header-smoke
+printf 'obj-m += yzd_header_smoke.o\n' > /var/tmp/yzd-build/header-smoke/Makefile
+cat > /var/tmp/yzd-build/header-smoke/yzd_header_smoke.c <<'MODULE'
+#include <linux/module.h>
+static int __init yzd_init(void) { return 0; }
+static void __exit yzd_exit(void) { }
+module_init(yzd_init);
+module_exit(yzd_exit);
+MODULE_LICENSE("GPL");
+MODULE
+make -C "$headers" ARCH=arm64 CROSS_COMPILE= M=/var/tmp/yzd-build/header-smoke modules
+modinfo -F vermagic /var/tmp/yzd-build/header-smoke/yzd_header_smoke.ko | grep -q "^$release "
+cp /var/tmp/yzd-build/header-smoke/yzd_header_smoke.ko "$stage/usr/share/doc/yzd-s18-kernel/"
 ln -s "/usr/src/linux-headers-$release" "$stage/usr/lib/modules/$release/build"
 cp "$kernel/boot/Image-$release" "$stage/boot/"
 cp "$kernel/boot/dtb/amlogic/"*.dtb "$stage/boot/dtb/amlogic/"
@@ -74,7 +102,7 @@ ln -s /opt/yzd-s18/video/yzd_s18_video.py /usr/local/bin/yzd-s18-video
 ln -s /opt/yzd-s18/graphics_runtime.py /usr/local/bin/yzd-s18-graphics
 # Prevent vendor-incompatible update/install entrypoints, including future dpkg upgrades.
 mkdir -p /usr/lib/yzd-s18/disabled-tools
-for tool in armbian-update armbian-kernel armbian-install; do
+for tool in armbian-update armbian-kernel armbian-install armbian-tf; do
     dpkg-divert --local --rename --add --divert "/usr/lib/yzd-s18/disabled-tools/$tool" "/usr/sbin/$tool"
     cat > "/usr/sbin/$tool" <<'BLOCKED'
 #!/bin/sh
@@ -91,6 +119,7 @@ chmod 755 /usr/sbin/armbian-fix
 cat > /etc/initramfs-tools/conf.d/yzd-s18 <<'INITRAMFS'
 MODULES=most
 COMPRESS=gzip
+FSTYPE=ext4
 INITRAMFS
 # Disable automatic generic hooks: this dedicated build invokes mkinitramfs explicitly.
 printf 'update_initramfs=no\n' > /etc/initramfs-tools/update-initramfs.conf
@@ -112,13 +141,15 @@ ln -s "/boot/Image-$release" /vmlinuz
 ln -sfn usr/bin /bin
 ln -sfn usr/lib /lib
 ln -sfn usr/sbin /sbin
-printf 'yes\n' > /root/.no_rootfs_resize
+printf 'no\n' > /root/.no_rootfs_resize
 # ttyAML0 belongs to the mainline baseline, not this vendor UART.
 rm -f /etc/systemd/system/getty.target.wants/serial-getty@ttyAML0.service
 systemctl --root=/ enable ssh NetworkManager yzd-s18-display yzd-s18-video yzd-s18-grow-root yzd-s18-identity
 systemctl --root=/ mask armbian-resize-filesystem.service
 systemd-analyze verify /etc/systemd/system/yzd-s18-{display,video,grow-root}.service
 printf 'yzd-s18\n' > /etc/hostname
+install -d /etc/profile.d
+printf 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' > /etc/profile.d/yzd-s18-path.sh
 sed -i 's/\barmbian\b/yzd-s18/g' /etc/hosts
 ln -sfn /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 printf 'Asia/Shanghai\n' > /etc/timezone

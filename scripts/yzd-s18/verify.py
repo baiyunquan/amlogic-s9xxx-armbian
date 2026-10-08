@@ -52,6 +52,13 @@ def rootfs(root):
     identity=json.loads((root/"etc/yzd-s18/image.json").read_text())
     assert identity["kernel_release"]==RELEASE
     assert len(list((root/"usr/lib/modules").iterdir()))==1
+    assert (root/"root/.no_rootfs_resize").read_text().strip()=="no"
+    headers=root/f"usr/src/linux-headers-{RELEASE}"
+    for helper in ("scripts/basic/fixdep","scripts/mod/modpost"):
+        with (headers/helper).open("rb") as f:
+            elf=f.read(20)
+        assert elf[:4]==b"\x7fELF" and struct.unpack_from("<H",elf,18)[0]==183, helper
+    assert call(["modinfo","-F","vermagic",root/"usr/share/doc/yzd-s18-kernel/yzd_header_smoke.ko"]).startswith(RELEASE+" ")
     for name in ("sbin/init","usr/lib/systemd/systemd","sbin/fsck.ext4","usr/bin/python3","usr/sbin/sshd","var/lib/dpkg/status"):
         assert (root/name).exists(), name
     fstab=(root/"etc/fstab").read_text()

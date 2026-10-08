@@ -93,6 +93,7 @@ done
 mkdir -p "$root/dev/pts"
 mount -t devpts -o mode=620 devpts "$root/dev/pts"
 YZD_MOUNTS+=("$root/dev/pts")
+ln -s pts/ptmx "$root/dev/ptmx"
 ln -s /proc/self/fd "$root/dev/fd"
 mount -t proc proc "$root/proc"; YZD_MOUNTS+=("$root/proc")
 mount -t sysfs -o ro,nosuid,noexec sysfs "$root/sys"; YZD_MOUNTS+=("$root/sys")
@@ -109,7 +110,7 @@ for script in s905_autoscript boot.scr aml_autoscript; do
     mkimage -A arm64 -O linux -T script -C none -n 'YZD-S18 USB boot' -d "$REPO/scripts/yzd-s18/boot.cmd" "$root/boot/$script"
 done
 cp "$REPO/scripts/yzd-s18/boot.cmd" "$root/boot/yzd-s18-boot.cmd"
-chroot "$root" /bin/bash -c '/sbin/init --version; /sbin/fsck.ext4 -V; dpkg --audit; /opt/yzd-s18/video/ffmpeg-5.1.9/bin/ffmpeg -version; python3 /opt/yzd-s18/graphics_runtime.py status' > "$OUTPUT/chroot-checks.txt" 2>&1
+chroot "$root" /bin/bash -ec '/sbin/init --version; /sbin/fsck.ext4 -V; dpkg --audit; /opt/yzd-s18/video/ffmpeg-5.1.9/bin/ffmpeg -version; python3 /opt/yzd-s18/graphics_runtime.py status' > "$OUTPUT/chroot-checks.txt" 2>&1
 python3 "$REPO/scripts/yzd-s18/verify.py" root "$root" --report "$OUTPUT/validation.json"
 cp "$root/etc/yzd-s18/image.json" "$OUTPUT/image.json"
 cp "$root/opt/yzd-build-inputs/kernel/build-manifest.txt" "$OUTPUT/kernel-build-manifest.txt"

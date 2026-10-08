@@ -21,3 +21,12 @@ Base commit: 7d81e344. Work on main was explicitly requested.
   inside final Bookworm rootfs. This keeps dpkg consistent and one kernel ABI.
 - Ruling: disable the generic armbian-fix first-boot cleanup/resize entrypoint
   in this profile. Dedicated SSH identity and guarded USB resize services replace it.
+- Independent review found the common startup script also launches armbian-tf
+  when .no_rootfs_resize is yes. Its actual startup block was reproduced in a
+  regression (RED), then disabled with no and a diverted armbian-tf (GREEN).
+- Independent review found missing native header helpers in the cross-built
+  headers. Build those in Bookworm external-module mode to preserve the pinned
+  kernel configuration; require a compiled external module with matching ABI.
+- Local integration found inherited host PATH and chroot fsck detection issues.
+  Set Debian PATH explicitly and FSTYPE=ext4; preserve a private /dev and require
+  executable checks to stop on the first failure.

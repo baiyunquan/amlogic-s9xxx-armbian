@@ -90,9 +90,13 @@ The private FFmpeg 5.1.9 runtime retains NV12M capture validation, GLES2/alpha8,
 exclusive fullscreen and signal-safe orderly teardown. Its source, patch and
 GPL license are in /usr/share/doc/yzd-s18-video-source. Kernel source snapshots,
 patches and build provenance are separate immutable input Release assets.
+Installed kernel headers include native ARM64 build helpers. The build compiles
+a minimal external module and checks its vermagic against the fixed release.
 
 The first boot runs no video playback, GPU benchmarks or polling monitors.
 Generic armbian-update/kernel/eMMC install commands are blocked on this image.
+The legacy armbian-tf resize path is blocked too; only the guarded USB growth
+service handles first-boot partition expansion.
 To restore original graphics libraries use yzd-s18-graphics restore; install
 returns to the pinned Mali backend. Keep Mali enabled for vendor ffplay playback.
 
