@@ -71,6 +71,18 @@ def rootfs(root):
     assert not list(boot.glob("*ophub*"))
     assert sha(root/"usr/lib/firmware/video/video_ucode.bin")=="80522fd7376bde74be185e822c314f9beddee0264279bb4538d104588f46b094"
     assert sha(root/"opt/yzd-s18/mali-r44p0/lib/libMali.so")=="c2524056ef47ed5b503615a2aa7bf133bffadcd0fd3dba236ee9778f725bf64d"
+    media={
+        "ffmpeg":"82912bee965e1c13e03a2fa2b45d910ad09809758ebe57aaa062c1fcc129f63c",
+        "ffplay":"c0fd98095938c63e821b52bf8cc57fcdf872512c9362b54ac434924b82810c13",
+        "ffprobe":"3bc29c88ad04b09c3978835ed1c11c1a8be829db995d65785b14f477ef4e88eb"}
+    for name,digest in media.items():
+        assert sha(root/f"opt/yzd-s18/video/ffmpeg-5.1.9/bin/{name}")==digest, name
+    config=(boot/f"config-{RELEASE}").read_text()
+    assert "CONFIG_EXT4_FS=y\n" in config and "CONFIG_USB_STORAGE=y\n" in config
+    original=root/"opt/yzd-build-inputs/kernel/boot"
+    for file in original.rglob("*"):
+        if file.is_file():
+            assert sha(file)==sha(boot/file.relative_to(original)), str(file)
     listing=(root/"var/lib/yzd-s18/initramfs.list").read_text()
     versions=set()
     for line in listing.splitlines():
@@ -86,7 +98,8 @@ def rootfs(root):
         assert hashlib.file_digest(f,"sha256").hexdigest()==payload
     assert not (root/"var/lib/yzd-s18/dpkg-audit.txt").read_text()
     return {"status":"offline-validation-passed","hardware_acceptance":"pending","identity":identity,
-            "initramfs_sha256":payload,"packages":(root/"var/lib/yzd-s18/packages.tsv").read_text().splitlines()}
+            "initramfs_sha256":payload,"media_sha256":media,
+            "packages":(root/"var/lib/yzd-s18/packages.tsv").read_text().splitlines()}
 
 def main():
     p=argparse.ArgumentParser()

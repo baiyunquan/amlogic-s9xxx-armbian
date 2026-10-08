@@ -120,6 +120,10 @@ YZD_MOUNTS=(); YZD_LOOPS=()
 check_loop="$(losetup --partscan --find --show "$image")"; YZD_LOOPS=("$check_loop")
 fsck.vfat -n "${check_loop}p1" > "$OUTPUT/fsck-boot.txt"
 e2fsck -fn "${check_loop}p2" > "$OUTPUT/fsck-root.txt" 2>&1
+tune2fs -l "${check_loop}p2" > "$OUTPUT/ext4-features.txt"
+if grep '^Filesystem features:' "$OUTPUT/ext4-features.txt" | grep -qw orphan_file; then
+    echo 'Unsupported ext4 orphan_file feature' >&2; exit 1
+fi
 sfdisk --json "$image" > "$OUTPUT/partitions.json"
 python3 "$REPO/scripts/yzd-s18/verify.py" partitions "$OUTPUT/partitions.json"
 yzd_cleanup; YZD_LOOPS=()
