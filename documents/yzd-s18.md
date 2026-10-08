@@ -1,5 +1,21 @@
 # YZD-S18 Bookworm USB vendor image
 
+## Published build, 2026-10-08
+
+**镜像构建与离线检查完成；新镜像实机验收待完成。**
+
+- [Final image, SHA256 and reports](https://github.com/baiyunquan/amlogic-s9xxx-armbian/releases/tag/yzd-s18-bookworm-20261008-40621b9e-2)
+- [Successful ARM64 workflow](https://github.com/baiyunquan/amlogic-s9xxx-armbian/actions/runs/37745223274)
+- Build commit: `40621b9e3d25fc655525ce710fd516440cec1d69`
+- Image SHA256: `a418023dd27f06d750b5afb27ae9ccb57280dfec7c230633aef9e1145b74e509`
+
+The downloaded image passed local SHA256/gzip checks and direct MBR/UUID/ext4
+superblock inspection. See [download verification](yzd-s18-download-verification.json).
+Physical USB boot, four cores, SSH, native JMicron UAS, GPU/VPU and HDMI playback
+still require acceptance on the newly flashed image.
+
+## Rebuild
+
 Build entry: **Build YZD-S18 Bookworm vendor image** in Actions, or:
 
 ```sh

@@ -1,0 +1,30 @@
+{
+  "image": "Armbian_26.11.0_amlogic_yzd-s18_bookworm_5.15.137-yzd-s18-usbfix_server_2026.10.08.img.gz",
+  "image_sha256": "a418023dd27f06d750b5afb27ae9ccb57280dfec7c230633aef9e1145b74e509",
+  "partition_table": [
+    [
+      12,
+      8192,
+      1046528
+    ],
+    [
+      131,
+      1056768,
+      12582912
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "boot_uuid": "A996-1B12",
+  "root_uuid": "2318c106-c35c-490c-82ed-f0407b63a73c",
+  "orphan_file": false,
+  "hardware_acceptance": "pending"
+}
