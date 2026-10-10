@@ -129,9 +129,16 @@ Installed kernel headers include native ARM64 build helpers. The build compiles
 a minimal external module and checks its vermagic against the fixed release.
 
 The first boot runs no video playback, GPU benchmarks or polling monitors.
-Generic armbian-update/kernel/eMMC install commands are blocked on this image.
-The legacy armbian-tf resize path is blocked too; only the guarded USB growth
-service handles first-boot partition expansion.
+Generic armbian-update/kernel and TF resize commands are blocked on this image.
+`/usr/sbin/armbian-install` is the YZD-specific guarded installer. It refuses
+to run without an eMMC-enabled DTB, validates the factory DOS/extended layout,
+backs up the first 4 MiB, boot0/boot1, factory small partitions and U-Boot
+environment, formats only the factory data partition, and updates only
+`start_emmc_autoscript`. It never writes a replacement U-Boot image or MBR.
+Use `armbian-install status`, then `armbian-install --dry-run`; the real write
+is `armbian-install install --yes`. The backup directory contains the restore
+input for `armbian-install restore-env <directory>`. USB remains the first
+rescue path through the original `start_autoscript` sequence.
 To restore original graphics libraries use yzd-s18-graphics restore; install
 returns to the pinned Mali backend. Keep Mali enabled for vendor ffplay playback.
 
@@ -151,3 +158,8 @@ validation.json explicitly marks hardware acceptance pending. GitHub CI cannot
 prove HDMI picture, native USB/UAS recovery, GPU acceleration or decoded pixels.
 Those require a later boot on YZD-S18 with the new image. Flashing the physical
 USB disk is a separate operation and is not performed by these build tools.
+
+The formal eMMC installer plan is in
+`docs/superpowers/plans/2026-10-10-yzd-s18-emmc-installer.md`. The release
+workflow publishes the image and installer as a non-prerelease GitHub Release;
+the subsequent power cycle and eMMC boot are intentionally manual.

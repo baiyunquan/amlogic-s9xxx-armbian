@@ -45,6 +45,16 @@ jobs:
           set -euo pipefail
           bundle="$(python3 -c 'import json; print(json.load(open("scripts/yzd-s18/inputs.lock.json"))["kernel_bundle"])')"
           sudo ./rebuild -b yzd-s18 --custom-kernel-bundle "build/yzd-s18-inputs/$bundle"             --yzd-inputs-dir build/yzd-s18-inputs --output build/output/yzd-s18             2>&1 | tee build/yzd-s18-build.log
+      - name: Validate preserved-U-Boot eMMC installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/yzd-s18/armbian-install
+          test -x build/output/yzd-s18/armbian-install
+          grep -q 'start_emmc_autoscript' build/output/yzd-s18/armbian-install
+          ! grep -q 'mklabel' build/output/yzd-s18/armbian-install
+          ! grep -q 'of="\$TARGET"' build/output/yzd-s18/armbian-install
+          test -f build/output/yzd-s18/2026-10-10-yzd-s18-emmc-installer.md
       - name: Preserve validation and failure logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -65,5 +75,5 @@ jobs:
           (cd "$out"; sha256sum -c ./*.img.gz.sha256)
           tag="yzd-s18-bookworm-$(date -u +%Y%m%d)-${GITHUB_SHA:0:8}-${GITHUB_RUN_NUMBER}"
           gh release create "$tag" "$out"/* --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" --prerelease --title "YZD-S18 Bookworm / Khadas 5.15" \
-            --notes "USB server image: Khadas 5.15.137-yzd-s18-usbfix, Mali r44p0, vendor V4L2 H.264/H.265 and KMS playback. Offline image validation passed. Hardware boot, UAS and video acceptance remain pending. See documents/yzd-s18.md at this build commit."
+            --target "$GITHUB_SHA" --title "YZD-S18 Bookworm / Khadas 5.15 (eMMC-safe)" \
+            --notes "Formal YZD-S18 Bookworm server image. Includes the pinned 5.15.137-yzd-s18-usbfix kernel, Mali r44p0, vendor V4L2 video, KMS playback, and armbian-install with factory-layout checks. The installer preserves boot0/boot1, the factory MBR, and the original U-Boot image; it backs up the environment and changes only start_emmc_autoscript. Offline validation passed. Reboot and hardware eMMC/UAS/video acceptance remain manual. See documents/yzd-s18.md and the attached installer plan."
