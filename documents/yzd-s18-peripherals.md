@@ -64,8 +64,14 @@ cannot replace it with a status-only copy of the old video DTB.
   `0905462a7b7dae8cff3aad124bc191905dd5bcb97ac27ee2a0b51d4bd96d70e6`;
   boot0/boot1: `0263d24adee049f09d7e2f13acc1da8105372a33f51399906d0b8e896184a9b0`.
 - LIRC reported raw reception, 10 us resolution and no transmitter. rc0
-  used meson-ir/rc-empty with only lirc enabled. A bounded 60-second capture
-  received no pulses: physical reception and AC packet decoding are pending.
+  used meson-ir/rc-empty with only lirc enabled. The initial bounded capture
+  received no pulses. A subsequent 60-second capture while the user pressed
+  keys received 3764 events: 1882 pulses, 1831 spaces and 51 timeouts.
+  Offline parsing found 53 complete 32-bit NEC frames, 40 NEC repeat frames
+  and 10 distinct commands. All 53 address/command inverse-byte checks passed;
+  every observed full NEC leader had 32 decoded bits. The receiver interrupt
+  count was 11262. Physical raw IR reception is now accepted; this particular
+  sample contains NEC remote packets, so Bosch144 AC decoding remains untested.
 - OpenCL passed 100 x 1,048,576 integer additions with full comparisons.
   The captured kernel log contained no panic, SError, workqueue lockup,
   GPU reset or DRM commit/page-flip timeout matching the acceptance patterns.
@@ -79,8 +85,10 @@ timeout 20 ir-ctl -d /dev/lirc-yzd-s18 --receive=/var/tmp/ir.raw --mode2
 cat /var/tmp/ir.raw
 ```
 
-Timeout exit 124 is normal for a bounded capture. Nonempty pulse/space data is
-required before claiming physical reception. The local Meidi-IR-ZZU parser
+Timeout exit 124 is normal for a bounded capture. The follow-up physical
+capture passed; raw events and decoded NEC frame counts are recorded in
+`logs/peripherals/ir-recapture.raw` and `ir-recapture-result.json` in the
+porting workspace. The local Meidi-IR-ZZU parser
 can consume LIRC MODE2 data; no AC daemon or IR transmission was started here.
 
 The existing USB now defaults to the peripherals config and preserves
