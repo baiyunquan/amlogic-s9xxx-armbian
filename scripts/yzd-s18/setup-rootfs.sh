@@ -22,6 +22,7 @@ if (( ${#old[@]} )); then
 fi
 packages=(initramfs-tools e2fsprogs u-boot-tools kmod hdparm python3 openssh-server network-manager
     rsync cloud-guest-utils parted util-linux kbd ffmpeg libsdl2-2.0-0 v4l-utils
+    device-tree-compiler
     mesa-utils mesa-utils-bin glmark2-es2-drm libdrm-tests libvulkan1 vulkan-tools
     clinfo ocl-icd-libopencl1 ocl-icd-opencl-dev opencl-headers
     build-essential flex bison libssl-dev libelf-dev pkg-config libegl-dev libgles-dev libgbm-dev libvulkan-dev
@@ -81,6 +82,14 @@ dpkg-deb --build --root-owner-group "$stage" /var/tmp/yzd-build/yzd-s18-kernel.d
 dpkg -i /var/tmp/yzd-build/yzd-s18-kernel.deb
 apt-mark hold yzd-s18-kernel
 depmod -a "$release"
+# Ship an eMMC-enabled companion DTB while keeping the default USB/video DTB.
+# fdtput changes only the status of the SM1 eMMC controller; bootloader and
+# partition handling remain the installer's responsibility.
+emmc_dtb=/boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-emmc.dtb
+cp -f /boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-usbfix-video.dtb "$emmc_dtb"
+fdtput -t s "$emmc_dtb" /emmc@ffe07000 status okay
+fdtput -t s "$emmc_dtb" /sdio@ffe03000 status disabled
+[[ "$(fdtget -t s "$emmc_dtb" /emmc@ffe07000 status)" == okay ]]
 # Install only the pinned Mali library; do not run the vendor .deb replacement hooks.
 dpkg-deb -x "$vendor/mali.deb" /var/tmp/yzd-build/mali-extract
 install -d /opt/yzd-s18/mali-r44p0/lib /opt/yzd-s18/mali-r44p0/vendors /lib/firmware/video
@@ -101,9 +110,9 @@ chmod 755 /opt/yzd-s18/*.sh /opt/yzd-s18/graphics_runtime.py /opt/yzd-s18/video/
 chmod 755 /usr/local/sbin/yzd-s18-disk-power
 ln -s /opt/yzd-s18/video/yzd_s18_video.py /usr/local/bin/yzd-s18-video
 ln -s /opt/yzd-s18/graphics_runtime.py /usr/local/bin/yzd-s18-graphics
-# Prevent vendor-incompatible update/install entrypoints, including future dpkg upgrades.
+# Prevent vendor-incompatible update entrypoints, including future dpkg upgrades.
 mkdir -p /usr/lib/yzd-s18/disabled-tools
-for tool in armbian-update armbian-kernel armbian-install armbian-tf; do
+for tool in armbian-update armbian-kernel armbian-tf; do
     dpkg-divert --local --rename --add --divert "/usr/lib/yzd-s18/disabled-tools/$tool" "/usr/sbin/$tool"
     cat > "/usr/sbin/$tool" <<'BLOCKED'
 #!/bin/sh
@@ -112,6 +121,10 @@ exit 1
 BLOCKED
     chmod 755 "/usr/sbin/$tool"
 done
+# Install the YZD-specific eMMC installer. It never repartitions the factory
+# disk or writes boot0/boot1; the generic installer is retained as a backup.
+dpkg-divert --local --rename --add --divert /usr/lib/yzd-s18/disabled-tools/armbian-install /usr/sbin/armbian-install
+install -m 0755 /tmp/yzd-armbian-install /usr/sbin/armbian-install
 # The generic first-run fixer purges package records and performs an unchecked
 # resize. This image was finalized and checked during CI; use its own services.
 dpkg-divert --local --rename --add --divert /usr/lib/yzd-s18/disabled-tools/armbian-fix /usr/sbin/armbian-fix

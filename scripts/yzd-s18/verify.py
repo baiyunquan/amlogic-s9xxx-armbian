@@ -74,10 +74,22 @@ def rootfs(root):
         assert (root/name).exists(), name
     fstab=(root/"etc/fstab").read_text()
     env=(root/"boot/uEnv.txt").read_text()
+    boot=root/"boot"
     assert identity["root_uuid"] in fstab and identity["root_uuid"] in env
     assert identity["boot_uuid"] in fstab and "console=ttyS0," in env
     assert "usb-storage.quirks" not in env
-    boot=root/"boot"
+    installer=root/"usr/sbin/armbian-install"
+    assert installer.is_file() and installer.stat().st_mode & 0o111
+    installer_text=installer.read_text()
+    assert "factory data partition" in installer_text
+    assert "boot0" in installer_text and "boot1" in installer_text
+    assert "start_emmc_autoscript" in installer_text
+    assert "mklabel" not in installer_text
+    assert "of=\"$TARGET\"" not in installer_text
+    emmc_dtb=boot/f"dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-emmc.dtb"
+    assert emmc_dtb.is_file()
+    assert call(["fdtget","-t","s",emmc_dtb,"/emmc@ffe07000","status"]) == "okay"
+    assert call(["fdtget","-t","s",emmc_dtb,"/sdio@ffe03000","status"]) == "disabled"
     assert len(list(boot.glob("Image-*")))==1
     assert not list(boot.glob("*ophub*"))
     assert sha(root/"usr/lib/firmware/video/video_ucode.bin")=="80522fd7376bde74be185e822c314f9beddee0264279bb4538d104588f46b094"

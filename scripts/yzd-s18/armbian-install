@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# Safe YZD-S18 eMMC installer: preserve factory MBR, boot0/boot1 and U-Boot.
+set -Eeuo pipefail
+PROG=${0##*/}; BACKUP_ROOT=/var/backups/yzd-s18-emmc
+ENV_OFFSET=0x07400000; ENV_SIZE=0x00080000
+TARGET=; DATA_PART=; ENV_CONFIG=; MOUNT_DIR=; BACKUP_DIR=; YES=0; DRY=0
+die(){ echo "$PROG: $*" >&2; exit 1; }; say(){ printf '%s\n' "$*"; }
+need(){ command -v "$1" >/dev/null || die "missing command: $1"; }
+usage(){ cat <<'EOF'
+armbian-install status
+armbian-install --dry-run [--target /dev/mmcblkN]
+armbian-install install --yes [--target /dev/mmcblkN]
+armbian-install restore-env BACKUP_DIRECTORY
+Only the verified factory data partition is formatted. The first 4 MiB,
+boot0, boot1, MBR and U-Boot image are never written.
+EOF
+}
+cleanup(){ local rc=$?; trap - EXIT; if [[ -n "$MOUNT_DIR" ]] && mountpoint -q "$MOUNT_DIR" 2>/dev/null; then sync; umount "$MOUNT_DIR" || rc=1; fi; [[ -n "$MOUNT_DIR" ]] && rmdir "$MOUNT_DIR" 2>/dev/null || :; [[ -n "$ENV_CONFIG" ]] && rm -f "$ENV_CONFIG"; exit "$rc"; }
+trap 'echo "$PROG: failed at line $LINENO; no reboot was attempted" >&2' ERR
+[[ $(id -u) -eq 0 ]] || die 'run as root'
+for c in findmnt lsblk sfdisk blkid blockdev python3; do need "$c"; done
+
+discover(){
+  if [[ -n "$TARGET" ]]; then
+    [[ "$TARGET" =~ ^/dev/mmcblk[0-9]+$ && -b "$TARGET" ]] || die "invalid eMMC target: $TARGET"; printf '%s\n' "$TARGET"; return
+  fi
+  local n b
+  for n in /sys/block/mmcblk[0-9]*; do
+    [[ -e "$n" ]] || continue; b=${n##*/}; [[ -b /dev/$b && -b /dev/${b}boot0 && -b /dev/${b}boot1 ]] || continue
+    printf '/dev/%s\n' "$b"; return
+  done
+  return 1
+}
+rootdisk(){ local s p; s=$(findmnt -n -o SOURCE / 2>/dev/null || :); [[ "$s" == /dev/* ]] || return 0; p=$(lsblk -no PKNAME "$s" 2>/dev/null || :); [[ -n "$p" ]] && printf '/dev/%s\n' "${p%%[0-9]*}"; }
+json(){ sfdisk --json "$1"; }
+data_part(){
+  local d=$1 j; j=$(json "$d")
+  python3 - "$d" "$j" <<'PY'
+import json,sys
+d,t=sys.argv[1:]; p=json.loads(t)['partitiontable']
+if p.get('label')!='dos': raise SystemExit('not DOS/MBR')
+for i,x in enumerate(p.get('partitions',[]),1):
+    if str(x.get('type','')).lower()=='83' and int(x.get('start',-1))==385024 and 14000000<=int(x.get('size',-1))<=16000000:
+        print(x.get('node') or f'{d}p{i}'); break
+else: raise SystemExit('factory data partition not found')
+PY
+}
+check_layout(){
+  local d=$1 j; j=$(json "$d")
+  python3 - "$j" <<'PY'
+import json,sys
+p=json.loads(sys.argv[1])['partitiontable']; q=p.get('partitions',[])
+if p.get('label')!='dos': raise SystemExit('partition label is not DOS')
+want={1:(0,8192),2:(73728,131072),4:(221184,14884864),5:(237568,16384),6:(270336,16384),7:(303104,65536),8:(385024,14884864)}
+for i,(s,z) in want.items():
+ x=q[i-1] if len(q)>=i else {}
+ if int(x.get('start',-1))!=s or int(x.get('size',-1))!=z: raise SystemExit(f'factory partition {i} mismatch')
+print('factory-layout-ok')
+PY
+}
+envcfg(){
+  ENV_CONFIG=$(mktemp); chmod 600 "$ENV_CONFIG"
+  printf '%s %s %s\n' "$1" "$ENV_OFFSET" "$ENV_SIZE" > "$ENV_CONFIG"
+}
+backup(){
+  local d=$1 dir p; mkdir -p "$BACKUP_ROOT"; dir="$BACKUP_ROOT/$(date -u +%Y%m%dT%H%M%SZ)-${d##*/}"; (umask 077; mkdir "$dir"); BACKUP_DIR=$dir
+  sfdisk --dump "$d" > "$dir/partition-table.sfdisk"; blkid "$d" > "$dir/blkid.txt" 2>&1 || :
+  dd if="$d" of="$dir/first-4MiB.bin" bs=1M count=4 conv=sync,fsync status=none
+  for p in 5 6 7; do dd if="${d}p$p" of="$dir/factory-p$p.bin" bs=1M conv=sync,fsync status=none; done
+  for p in boot0 boot1; do dd if="${d}$p" of="$dir/$p.bin" bs=1M conv=sync,fsync status=none; done
+  printf '%s\n' "$d" > "$dir/device"; printf '%s\n' "$DATA_PART" > "$dir/data-partition"
+  if command -v fw_printenv >/dev/null; then fw_printenv -c "$ENV_CONFIG" > "$dir/fw-printenv.txt" 2>&1 || :; fw_printenv -c "$ENV_CONFIG" start_emmc_autoscript 2>/dev/null | sed 's/^[^=]*=//' > "$dir/start_emmc_autoscript.old" || :; fi
+  [[ -s "$dir/start_emmc_autoscript.old" ]] || printf '__UNSET__\n' > "$dir/start_emmc_autoscript.old"
+  sha256sum "$dir"/* > "$dir/SHA256SUMS"
+  say "backup=$dir"
+}
+make_dtb(){
+  local r=$1 s o; need fdtput
+  s=$(find "$r/boot/dtb/amlogic" -type f -name '*video.dtb' -print -quit); [[ -n "$s" ]] || die 'video DTB missing'
+  o="$r/boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-emmc.dtb"; cp -f "$s" "$o"
+  fdtput -t s "$o" /emmc@ffe07000 status okay; fdtput -t s "$o" /sdio@ffe03000 status disabled
+  [[ "$(fdtget -t s "$o" /emmc@ffe07000 status)" == okay ]] || die 'eMMC DTB update failed'
+}
+copy_system(){
+  local m=$1 u r; u=$(blkid -s UUID -o value "$DATA_PART"); [[ "$u" =~ ^[0-9a-f-]{36}$ ]] || die 'bad ext4 UUID'
+  mount -t ext4 -o noatime,nodiratime "$DATA_PART" "$m"; MOUNT_DIR=$m
+  rsync -aHAX --numeric-ids --delete --exclude='/dev/***' --exclude='/proc/***' --exclude='/sys/***' --exclude='/run/***' --exclude='/tmp/***' --exclude='/mnt/***' --exclude='/media/***' --exclude='/lost+found/***' --exclude='/boot/***' --exclude='/var/log.hdd/***' --exclude='/var/cache/apt/archives/***' / "$m/"
+  rsync -aHAX --numeric-ids --delete /boot/ "$m/boot/"; make_dtb "$m"; r=$(uname -r)
+  [[ -f "$m/boot/Image-$r" && -f "$m/boot/uInitrd-$r" ]] || die 'matching Image/uInitrd missing'
+  ln -sfn "Image-$r" "$m/boot/Image"; ln -sfn "uInitrd-$r" "$m/boot/uInitrd"
+  cat > "$m/boot/uEnv.txt" <<EOF
+LINUX=/boot/Image
+INITRD=/boot/uInitrd
+FDT=/boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-emmc.dtb
+APPEND=root=UUID=$u rw rootwait rootfstype=ext4 console=ttyS0,115200n8 console=tty0 no_console_suspend earlycon=aml-uart,0xff803000 video=HDMI-A-1:1920x1080@60
+EOF
+  cat > "$m/etc/fstab" <<EOF
+UUID=$u / ext4 defaults,noatime,nodiratime,commit=600,errors=remount-ro 0 1
+tmpfs /tmp tmpfs defaults,nosuid,mode=1777 0 0
+EOF
+  [[ -f "$m/etc/yzd-s18/image.json" ]] && python3 - "$m/etc/yzd-s18/image.json" "$u" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); d=json.loads(p.read_text()); d.update(root_uuid=sys.argv[2],boot_uuid=None,disk_type='emmc-factory-data',installer='yzd-s18-preserve-uboot-v1'); p.write_text(json.dumps(d,indent=2)+'\n')
+PY
+  sync
+}
+setenv_emmc(){
+  local n=$1 v
+  v="if ext4load mmc 1:$n 0x10400000 /boot/uEnv.txt; then env import -t 0x10400000 \${filesize}; setenv bootargs \${APPEND}; if ext4load mmc 1:$n 0x11000000 \${LINUX}; then if ext4load mmc 1:$n 0x15000000 \${INITRD}; then if ext4load mmc 1:$n 0x01000000 \${FDT}; then fdt addr 0x01000000; booti 0x11000000 0x15000000 0x01000000; fi; fi; fi; fi"
+  need fw_setenv; fw_setenv -c "$ENV_CONFIG" start_emmc_autoscript "$v"
+  [[ "$(fw_printenv -c "$ENV_CONFIG" -n start_emmc_autoscript 2>/dev/null || :)" == "$v" ]] || die 'U-Boot environment verification failed'
+}
+status(){
+  echo "root=$(findmnt -n -o SOURCE / 2>/dev/null || echo unknown)"
+  if TARGET=$(discover 2>/dev/null); then echo "emmc=$TARGET"; DATA_PART=$(data_part "$TARGET") && { echo "data=$DATA_PART"; check_layout "$TARGET"; } || echo 'layout=reject'; else echo 'emmc=not-visible (DTB may disable eMMC)'; fi
+}
+dry(){
+  TARGET=$(discover) || die 'eMMC not visible; boot an eMMC-enabled DTB first'; [[ "$(rootdisk || :)" != "$TARGET" ]] || die 'target is current root disk'
+  DATA_PART=$(data_part "$TARGET"); check_layout "$TARGET"; envcfg "$TARGET"
+  say "DRY-RUN OK target=$TARGET data=$DATA_PART env=$ENV_OFFSET/$ENV_SIZE"; say 'No block device was written.'
+}
+install_image(){
+  [[ "$YES" == 1 ]] || die 'install requires --yes'; TARGET=$(discover) || die 'eMMC not visible; boot eMMC-enabled DTB first'
+  [[ "$(rootdisk || :)" != "$TARGET" ]] || die 'target is current root disk'; DATA_PART=$(data_part "$TARGET"); check_layout "$TARGET"; envcfg "$TARGET"; backup "$TARGET"
+  trap cleanup EXIT; mkfs.ext4 -F -q -O '^64bit,^metadata_csum,^orphan_file' -L ROOTFS_EMMC "$DATA_PART"
+  MOUNT_DIR=$(mktemp -d /run/yzd-s18-emmc.XXXXXX); copy_system "$MOUNT_DIR"; setenv_emmc "${DATA_PART##*p}"
+  tune2fs -l "$DATA_PART" | grep '^Filesystem features:' | tee "$BACKUP_DIR/data-ext4-features.txt"; sha256sum "$BACKUP_DIR"/* > "$BACKUP_DIR/SHA256SUMS"
+  say "eMMC data partition installed; backup=$BACKUP_DIR"; say 'Do not reboot until the backup path is recorded.'
+}
+restore(){
+  local d=$1 old; [[ -d "$d" && -f "$d/device" ]] || die 'invalid backup directory'; TARGET=$(cat "$d/device"); [[ -b "$TARGET" ]] || die "$TARGET not present"; envcfg "$TARGET"; old=$(cat "$d/start_emmc_autoscript.old"); need fw_setenv
+  if [[ "$old" == __UNSET__ ]]; then fw_setenv -c "$ENV_CONFIG" -d start_emmc_autoscript; else fw_setenv -c "$ENV_CONFIG" start_emmc_autoscript "$old"; fi
+  say 'start_emmc_autoscript restored; bootloader sectors were not touched.'
+}
+action=${1:-status}; shift || :
+while (($#)); do case "$1" in --target) [[ $# -ge 2 ]] || die '--target needs a device'; TARGET=$2; shift 2;; --yes) YES=1; shift;; --dry-run) DRY=1; shift;; -h|--help) usage; exit 0;; *) break;; esac; done
+case "$action" in status) status;; restore-env) [[ $# -eq 1 ]] || die 'restore-env needs backup dir'; restore "$1";; install) install_image;; --dry-run) dry;; *) usage >&2; exit 2;; esac
+

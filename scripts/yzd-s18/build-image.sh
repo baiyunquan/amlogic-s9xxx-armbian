@@ -102,6 +102,7 @@ mount -t tmpfs tmpfs "$root/run"; YZD_MOUNTS+=("$root/run")
 rm -f "$root/etc/resolv.conf"
 cp /etc/resolv.conf "$root/etc/resolv.conf"
 install -m 0755 "$REPO/scripts/yzd-s18/setup-rootfs.sh" "$root/tmp/yzd-setup-rootfs.sh"
+install -m 0755 "$REPO/scripts/yzd-s18/armbian-install" "$root/tmp/yzd-armbian-install"
 install -m 0644 "$REPO/scripts/yzd-s18/early-modules.txt" "$root/etc/initramfs-tools/modules"
 chroot "$root" /bin/bash /tmp/yzd-setup-rootfs.sh 2>&1 | tee "$OUTPUT/setup-rootfs.log"
 ln -sfn /run/NetworkManager/resolv.conf "$root/etc/resolv.conf"
@@ -113,6 +114,9 @@ cp "$REPO/scripts/yzd-s18/boot.cmd" "$root/boot/yzd-s18-boot.cmd"
 chroot "$root" /bin/bash -ec '/sbin/init --version; /sbin/fsck.ext4 -V; /usr/sbin/hdparm -V; dpkg --audit; /opt/yzd-s18/video/ffmpeg-5.1.9/bin/ffmpeg -version; python3 /opt/yzd-s18/graphics_runtime.py status' > "$OUTPUT/chroot-checks.txt" 2>&1
 python3 "$REPO/scripts/yzd-s18/verify.py" root "$root" --report "$OUTPUT/validation.json"
 cp "$root/etc/yzd-s18/image.json" "$OUTPUT/image.json"
+cp "$REPO/scripts/yzd-s18/armbian-install" "$OUTPUT/armbian-install"
+cp "$REPO/docs/superpowers/plans/2026-10-10-yzd-s18-emmc-installer.md" "$OUTPUT/"
+cp "$REPO/documents/yzd-s18.md" "$OUTPUT/yzd-s18-runtime-and-emmc.md"
 cp "$root/opt/yzd-build-inputs/kernel/build-manifest.txt" "$OUTPUT/kernel-build-manifest.txt"
 # Unmount binds and filesystems before filesystem checks or compression.
 yzd_cleanup
