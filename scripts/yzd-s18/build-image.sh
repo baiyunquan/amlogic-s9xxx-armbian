@@ -44,7 +44,7 @@ YZD_LOOPS+=("$base_loop")
 mount -o ro,noload "${base_loop}p2" "$YZD_WORK/base"
 YZD_MOUNTS+=("$YZD_WORK/base")
 [[ "$(sed -n 's/^VERSION_CODENAME=//p' "$YZD_WORK/base/etc/os-release")" == bookworm ]]
-release=5.15.137-yzd-s18-usbfix
+release=5.15.137-yzd-s18-peripherals
 name="Armbian_26.11.0_amlogic_yzd-s18_bookworm_${release}_server_$(date -u +%Y.%m.%d)"
 image="$YZD_WORK/$name.img"
 truncate -s 6660M "$image"
@@ -75,8 +75,8 @@ YZD_MOUNTS+=("$root/boot")
 python3 - "$root" "$root_uuid" "$boot_uuid" <<'PY'
 import json, pathlib, sys
 r=pathlib.Path(sys.argv[1])
-identity={"schema_version":1,"board":"yzd-s18","kernel_release":"5.15.137-yzd-s18-usbfix",
-          "root_uuid":sys.argv[2],"boot_uuid":sys.argv[3],"input_release":"yzd-s18-inputs-v1"}
+identity={"schema_version":1,"board":"yzd-s18","kernel_release":"5.15.137-yzd-s18-peripherals",
+          "root_uuid":sys.argv[2],"boot_uuid":sys.argv[3],"input_release":"yzd-s18-inputs-v2"}
 (r/"etc/yzd-s18/image.json").write_text(json.dumps(identity,indent=2)+"\n")
 (r/"etc/fstab").write_text(f"UUID={sys.argv[2]} / ext4 defaults,noatime,errors=remount-ro 0 1\nUUID={sys.argv[3]} /boot vfat defaults 0 2\ntmpfs /tmp tmpfs defaults,nosuid,mode=1777 0 0\n")
 PY
@@ -117,6 +117,7 @@ cp "$root/etc/yzd-s18/image.json" "$OUTPUT/image.json"
 cp "$REPO/scripts/yzd-s18/armbian-install" "$OUTPUT/armbian-install"
 cp "$REPO/docs/superpowers/plans/2026-10-10-yzd-s18-emmc-installer.md" "$OUTPUT/"
 cp "$REPO/documents/yzd-s18.md" "$OUTPUT/yzd-s18-runtime-and-emmc.md"
+cp "$REPO/documents/yzd-s18-peripherals.md" "$OUTPUT/"
 cp "$root/opt/yzd-build-inputs/kernel/build-manifest.txt" "$OUTPUT/kernel-build-manifest.txt"
 # Unmount binds and filesystems before filesystem checks or compression.
 yzd_cleanup

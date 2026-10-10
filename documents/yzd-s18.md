@@ -1,5 +1,9 @@
 # YZD-S18 Bookworm USB vendor image
 
+The current build pins `5.15.137-yzd-s18-peripherals` and the source-compiled
+eMMC/raw-IR profile. See [peripherals changes and board evidence](yzd-s18-peripherals.md).
+The dated published-build section below describes the older usbfix image.
+
 ## Published build, 2026-10-08
 
 **镜像构建与离线检查完成；新镜像实机验收待完成。**
@@ -19,9 +23,13 @@ still require acceptance on the newly flashed image.
 Build entry: **Build YZD-S18 Bookworm vendor image** in Actions, or:
 
 ```sh
-gh release download yzd-s18-inputs-v1 -R baiyunquan/amlogic-s9xxx-armbian -D build/yzd-s18-inputs
+gh release download yzd-s18-inputs-v1 -R baiyunquan/amlogic-s9xxx-armbian -D build/yzd-s18-inputs \
+  -p 'Armbian_26.11.0_amlogic_s905x3_bookworm_6.12.109_server_2026.09.14.img.gz' \
+  -p 'yzd-s18-vendor-runtime.tar.gz'
+gh release download yzd-s18-inputs-v2 -R baiyunquan/amlogic-s9xxx-armbian -D build/yzd-s18-inputs \
+  -p 'yzd-s18-kernel*'
 sudo ./rebuild -b yzd-s18 \
-  --custom-kernel-bundle build/yzd-s18-inputs/yzd-s18-kernel-5.15.137-yzd-s18-usbfix.tar.gz \
+  --custom-kernel-bundle build/yzd-s18-inputs/yzd-s18-kernel-5.15.137-yzd-s18-peripherals.tar.gz \
   --yzd-inputs-dir build/yzd-s18-inputs --output build/output/yzd-s18
 ```
 
@@ -39,9 +47,12 @@ starts at sector 1056768, initial size 6144 MiB. Each image has fresh UUIDs;
 fstab, uEnv and /etc/yzd-s18/image.json agree. Only the image's USB root
 partition is expanded by the first-boot service. BOOT is never expanded.
 
-BOOT contains one kernel, 5.15.137-yzd-s18-usbfix, a newly generated matching
-initramfs, and compute/display/video DTBs. The default is video with 564 MiB CMA.
-No eMMC installer, U-Boot overload or saveenv command is provided.
+BOOT contains one kernel, 5.15.137-yzd-s18-peripherals, a newly generated matching
+initramfs, and compute/display/video/peripherals DTBs. The default enables
+video with 564 MiB CMA, read-only eMMC enumeration and raw IR reception.
+No U-Boot overload or saveenv command is provided. eMMC installation has not
+been accepted in this round; the current device's eMMC layout differs from
+the legacy factory partition layout enforced by the installer.
 The scripts scan USB devices 0 through 7, verifying the YZD_BOARD marker and
 every load before booti. This accommodates changing JMicron/eVtran numbers.
 

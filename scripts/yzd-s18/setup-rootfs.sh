@@ -3,7 +3,7 @@ set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export LC_ALL=C.UTF-8
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-release=5.15.137-yzd-s18-usbfix
+release=5.15.137-yzd-s18-peripherals
 kernel=/opt/yzd-build-inputs/kernel
 vendor=/opt/yzd-build-inputs/vendor
 install -d /var/tmp/yzd-build /var/lib/yzd-s18 /root /var/tmp /etc/initramfs-tools/conf.d
@@ -70,25 +70,22 @@ cp "$kernel/System.map" "$stage/boot/System.map-$release"
 cp "$kernel/build-manifest.txt" "$stage/usr/share/doc/yzd-s18-kernel/"
 cat > "$stage/DEBIAN/control" <<'CONTROL'
 Package: yzd-s18-kernel
-Version: 5.15.137-usbfix-1
+Version: 5.15.137-peripherals-1
 Architecture: arm64
 Section: kernel
 Priority: optional
 Maintainer: baiyunquan <liaic@outlook.com>
 Description: YZD-S18 Khadas kernel, DTBs, headers and vendor modules
- Fixed release 5.15.137-yzd-s18-usbfix. Rebuild image to update.
+ Fixed release 5.15.137-yzd-s18-peripherals. Rebuild image to update.
 CONTROL
 dpkg-deb --build --root-owner-group "$stage" /var/tmp/yzd-build/yzd-s18-kernel.deb
 dpkg -i /var/tmp/yzd-build/yzd-s18-kernel.deb
 apt-mark hold yzd-s18-kernel
 depmod -a "$release"
-# Ship an eMMC-enabled companion DTB while keeping the default USB/video DTB.
-# fdtput changes only the status of the SM1 eMMC controller; bootloader and
-# partition handling remain the installer's responsibility.
+# Ship the source-compiled profile, with bus/pinctrl/supplies/reset and raw IR.
+# The previous status-only DTB did not contain the required eMMC properties.
 emmc_dtb=/boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-emmc.dtb
-cp -f /boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-usbfix-video.dtb "$emmc_dtb"
-fdtput -t s "$emmc_dtb" /emmc@ffe07000 status okay
-fdtput -t s "$emmc_dtb" /sdio@ffe03000 status disabled
+cp -f /boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-peripherals-peripherals.dtb "$emmc_dtb"
 [[ "$(fdtget -t s "$emmc_dtb" /emmc@ffe07000 status)" == okay ]]
 # Install only the pinned Mali library; do not run the vendor .deb replacement hooks.
 dpkg-deb -x "$vendor/mali.deb" /var/tmp/yzd-build/mali-extract
@@ -176,13 +173,13 @@ VERSION_CODENAME='bookworm'
 MODEL_ID='528'
 MODEL_NAME='YZD-S18'
 SOC='s905x3'
-FDTFILE='zh_s905x3_4g_rgmii-yzd-s18-usbfix-video.dtb'
+FDTFILE='zh_s905x3_4g_rgmii-yzd-s18-peripherals-peripherals.dtb'
 FAMILY='meson-sm1'
 BOARD='yzd-s18'
 KERNEL_REPO='baiyunquan/amlogic-s9xxx-armbian'
 KERNEL_TAGS='yzd-s18'
 KERNEL_VERSION='5.15.137'
-KERNEL_SIGNATURE='yzd-s18-usbfix'
+KERNEL_SIGNATURE='yzd-s18-peripherals'
 BOOT_CONF='uEnv.txt'
 ROOTFS_TYPE='ext4'
 DISK_TYPE='usb'

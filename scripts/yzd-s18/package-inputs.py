@@ -20,10 +20,11 @@ def main():
     p.add_argument("--porting-dir", type=Path, required=True)
     p.add_argument("--base-image", type=Path, required=True)
     p.add_argument("--firmware", type=Path, required=True)
+    p.add_argument("--vendor-bundle", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
     args = p.parse_args()
     src = args.porting_dir.resolve()
-    kernel = src / "output_debs/yzd-s18-usbfix"
+    kernel = src / "output_debs/yzd-s18-peripherals"
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=True)
     subprocess.run(["sha256sum", "-c", "SHA256SUMS"], cwd=kernel, check=True, stdout=subprocess.DEVNULL)
@@ -49,25 +50,17 @@ def main():
         for f in kernel.glob("*.dts"):
             shutil.copyfile(f, stage / f.name)
         files = {str(f.relative_to(stage)): sha(f) for f in stage.rglob("*") if f.is_file()}
-        (stage / "manifest.json").write_text(json.dumps({"kernel_release": RELEASE, "module_count": 1512, "files": files}, indent=2) + "\n")
+        (stage / "manifest.json").write_text(json.dumps({"kernel_release": RELEASE, "module_count": 1514, "files": files}, indent=2) + "\n")
         archive(stage, out / KERNEL)
     vendor = out / "yzd-s18-vendor-runtime.tar.gz"
-    with tempfile.TemporaryDirectory(prefix="yzd-vendor-") as tmp:
-        stage = Path(tmp)
-        shutil.copyfile(mali, stage / "mali.deb")
-        shutil.copyfile(args.firmware, stage / "video_ucode.bin")
-        for name in ("video-media-runtime.tar.gz",):
-            shutil.copyfile(src / "output_debs/yzd-s18-video" / name, stage / name)
-        shutil.copytree(src / "output_debs/yzd-s18-video/media/source", stage / "ffmpeg-source")
-        shutil.copytree(src / "output_debs/yzd-s18-video/reference", stage / "reference")
-        shutil.copytree(src / "test_videos", stage / "samples")
-        archive(stage, vendor)
+    assert sha(args.vendor_bundle) == "58ba165f8a9c7ff987ce70076cd94d508700a2ab6240518ff601ef6d22e1c73e"
+    shutil.copyfile(args.vendor_bundle, vendor)
     # Exact compiled source snapshots: git-listed source paths, using their
     # working-tree contents so uncommitted porting fixes are included.
     source = out / "yzd-s18-kernel-source.tar.gz"
     with tarfile.open(source, "w:gz", compresslevel=6) as tar:
         for tree in ("linux", "common_drivers"):
-            root = src / ".build-workspaces/usbfix" / tree
+            root = src / ".build-workspaces/peripherals" / tree
             names = subprocess.check_output(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=root).split(b"\0")
             for raw in sorted(set(names)):
                 if raw:
@@ -80,9 +73,11 @@ def main():
             tar.add(kernel / name, arcname="build/" + name)
     assets = {f.name: sha(f) for f in sorted(out.iterdir()) if f.name in (BASE, KERNEL, vendor.name, source.name)}
     lock = {"schema_version": 1, "repository": "baiyunquan/amlogic-s9xxx-armbian",
-            "release_tag": "yzd-s18-inputs-v1", "kernel_release": RELEASE,
+            "release_tag": "yzd-s18-inputs-v2", "kernel_release": RELEASE,
             "base_image": BASE, "kernel_bundle": KERNEL, "vendor_bundle": vendor.name,
-            "assets": assets}
+            "assets": assets, "asset_releases": {
+                BASE: "yzd-s18-inputs-v1", vendor.name: "yzd-s18-inputs-v1",
+                KERNEL: "yzd-s18-inputs-v2", source.name: "yzd-s18-inputs-v2"}}
     (out / "inputs.lock.json").write_text(json.dumps(lock, indent=2) + "\n")
     (out / "SHA256SUMS").write_text("".join(f"{digest}  {name}\n" for name, digest in assets.items()))
     print(out)

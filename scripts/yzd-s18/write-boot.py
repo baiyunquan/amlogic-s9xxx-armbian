@@ -7,7 +7,7 @@ release = identity["kernel_release"]
 lines = [
     "YZD_BOARD=yzd-s18", "initrd_high=0x7f800000", "fdt_high=0x20000000",
     f"LINUX=/Image-{release}", f"INITRD=/uInitrd-{release}",
-    f"FDT=/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-usbfix-video.dtb",
+    f"FDT=/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-peripherals-peripherals.dtb",
 ]
 args = (f"root=UUID={identity['root_uuid']} rw rootwait rootfstype=ext4 "
         "console=ttyS0,115200n8 no_console_suspend net.ifnames=0 "

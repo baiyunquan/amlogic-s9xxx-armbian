@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Publish verified image as a prerelease
+        description: Publish the verified USB image and reports to Release
         type: boolean
         default: true
 
@@ -35,9 +35,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="$(python3 -c 'import json; print(json.load(open("scripts/yzd-s18/inputs.lock.json"))["release_tag"])')"
           mkdir -p build/yzd-s18-inputs
-          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir build/yzd-s18-inputs
+          python3 - <<'PY' > build/input-downloads.tsv
+          import json
+          lock=json.load(open('scripts/yzd-s18/inputs.lock.json'))
+          for name in lock['assets']:
+              print(lock.get('asset_releases',{}).get(name,lock['release_tag']),name,sep='\t')
+          PY
+          while IFS=$'\t' read -r tag asset; do
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir build/yzd-s18-inputs
+          done < build/input-downloads.tsv
           python3 scripts/yzd-s18/inputs.py verify build/yzd-s18-inputs scripts/yzd-s18/inputs.lock.json
       - name: Construct and validate image
         shell: bash
@@ -75,5 +82,5 @@ jobs:
           (cd "$out"; sha256sum -c ./*.img.gz.sha256)
           tag="yzd-s18-bookworm-$(date -u +%Y%m%d)-${GITHUB_SHA:0:8}-${GITHUB_RUN_NUMBER}"
           gh release create "$tag" "$out"/* --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" --title "YZD-S18 Bookworm / Khadas 5.15 (eMMC-safe)" \
-            --notes "Formal YZD-S18 Bookworm server image. Includes the pinned 5.15.137-yzd-s18-usbfix kernel, Mali r44p0, vendor V4L2 video, KMS playback, and armbian-install with factory-layout checks. The installer preserves boot0/boot1, the factory MBR, and the original U-Boot image; it backs up the environment and changes only start_emmc_autoscript. Offline validation passed. Reboot and hardware eMMC/UAS/video acceptance remain manual. See documents/yzd-s18.md and the attached installer plan."
+            --target "$GITHUB_SHA" --title "YZD-S18 Bookworm / eMMC + raw IR USB profile" \
+            --notes "USB server image with pinned 5.15.137-yzd-s18-peripherals, Mali r44p0 and vendor V4L2 video. New source-compiled DTS enables 8-bit/52MHz eMMC and meson-ir raw LIRC reception. Board opt-out disables automatic reserved key/DTB repairs; eMMC is read-only and ignored by desktop automount. Kernel boot, SSH, eMMC enumeration and raw IR device capabilities were verified on the existing USB installation. Physical remote pulses and booting this newly constructed image remain pending. This release does not claim eMMC flashing acceptance. See documents/yzd-s18-peripherals.md."

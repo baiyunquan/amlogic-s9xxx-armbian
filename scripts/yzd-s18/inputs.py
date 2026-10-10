@@ -6,7 +6,7 @@ import json
 from pathlib import Path, PurePosixPath
 import tarfile
 
-RELEASE = "5.15.137-yzd-s18-usbfix"
+RELEASE = "5.15.137-yzd-s18-peripherals"
 BASE = "Armbian_26.11.0_amlogic_s905x3_bookworm_6.12.109_server_2026.09.14.img.gz"
 KERNEL = "yzd-s18-kernel-" + RELEASE + ".tar.gz"
 

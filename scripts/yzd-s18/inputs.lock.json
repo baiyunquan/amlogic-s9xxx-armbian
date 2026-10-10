@@ -1,15 +1,21 @@
 {
   "schema_version": 1,
   "repository": "baiyunquan/amlogic-s9xxx-armbian",
-  "release_tag": "yzd-s18-inputs-v1",
-  "kernel_release": "5.15.137-yzd-s18-usbfix",
+  "release_tag": "yzd-s18-inputs-v2",
+  "kernel_release": "5.15.137-yzd-s18-peripherals",
   "base_image": "Armbian_26.11.0_amlogic_s905x3_bookworm_6.12.109_server_2026.09.14.img.gz",
-  "kernel_bundle": "yzd-s18-kernel-5.15.137-yzd-s18-usbfix.tar.gz",
+  "kernel_bundle": "yzd-s18-kernel-5.15.137-yzd-s18-peripherals.tar.gz",
   "vendor_bundle": "yzd-s18-vendor-runtime.tar.gz",
   "assets": {
     "Armbian_26.11.0_amlogic_s905x3_bookworm_6.12.109_server_2026.09.14.img.gz": "c7a35424aa383bb1ff9190fa0c9492d6e7dbf426cc7bc09b7118b8e1e491476a",
-    "yzd-s18-kernel-5.15.137-yzd-s18-usbfix.tar.gz": "a32acf65b449f91ce832b8b4ff1f48475ec46068e4997f24182817d4b65c891f",
-    "yzd-s18-kernel-source.tar.gz": "3c96a3c5a5efb711a56b1276070a4101a65c1aada61b41b96248e0da58abf669",
+    "yzd-s18-kernel-5.15.137-yzd-s18-peripherals.tar.gz": "1846aa407072de9b7cc838e5ee0c5ca55e47c590faffca52b038d748a2a781c1",
+    "yzd-s18-kernel-source.tar.gz": "0df2f4ff79d024e1092efdaea115ba096de5f7eb7c06dc279f5380ab02ddf54c",
     "yzd-s18-vendor-runtime.tar.gz": "58ba165f8a9c7ff987ce70076cd94d508700a2ab6240518ff601ef6d22e1c73e"
+  },
+  "asset_releases": {
+    "Armbian_26.11.0_amlogic_s905x3_bookworm_6.12.109_server_2026.09.14.img.gz": "yzd-s18-inputs-v1",
+    "yzd-s18-vendor-runtime.tar.gz": "yzd-s18-inputs-v1",
+    "yzd-s18-kernel-5.15.137-yzd-s18-peripherals.tar.gz": "yzd-s18-inputs-v2",
+    "yzd-s18-kernel-source.tar.gz": "yzd-s18-inputs-v2"
   }
 }

@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/* USB root with read-only acceptance of eMMC and raw IR reception. */
+#include "zh_s905x3_4g_rgmii_video.dts"
+
+/ {
+    model = "YZD-S18 / PP-Link S21 (S905X3 HDMI eMMC raw IR)";
+    yzd-s18,peripherals-profile;
+    aliases {
+        mmc0 = &sd_emmc_c;
+        mmc1 = &sd_emmc_b;
+    };
+    flash_vcc: regulator-flash-vcc {
+        compatible = "regulator-fixed";
+        regulator-name = "FLASH_VCC_3V3";
+        regulator-min-microvolt = <3300000>;
+        regulator-max-microvolt = <3300000>;
+        regulator-boot-on;
+        regulator-always-on;
+    };
+    flash_vqmmc: regulator-flash-vqmmc {
+        compatible = "regulator-fixed";
+        regulator-name = "FLASH_IO_1V8";
+        regulator-min-microvolt = <1800000>;
+        regulator-max-microvolt = <1800000>;
+        vin-supply = <&flash_vcc>;
+        regulator-boot-on;
+        regulator-always-on;
+    };
+    emmc_pwrseq: emmc-pwrseq {
+        compatible = "mmc-pwrseq-emmc";
+        reset-gpios = <&gpio BOOT_12 GPIO_ACTIVE_LOW>;
+    };
+};
+
+&sd_emmc_c {
+    status = "okay";
+    pinctrl-0 = <&emmc_pins &emmc_ds_pins>;
+    pinctrl-1 = <&emmc_clk_gate_pins>;
+    pinctrl-names = "default", "clk-gate";
+    bus-width = <8>;
+    non-removable;
+    cap-mmc-highspeed;
+    max-frequency = <52000000>;
+    disable-wp;
+    vmmc-supply = <&flash_vcc>;
+    vqmmc-supply = <&flash_vqmmc>;
+    mmc-pwrseq = <&emmc_pwrseq>;
+    save_para = <0>;
+    amlogic,skip-dtbkey-init;
+    /delete-property/ mmc-ddr-1_8v;
+    /delete-property/ mmc-hs200-1_8v;
+    /delete-property/ mmc-hs400-1_8v;
+    /delete-property/ supports-cqe;
+};
+
+&ir {
+    compatible = "amlogic,meson-gxbb-ir";
+    reg = <0 0xff808000 0 0x24>;
+    interrupts = <GIC_SPI 196 IRQ_TYPE_EDGE_RISING>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&remote_pins>;
+    status = "okay";
+    /delete-property/ protocol;
+    /delete-property/ map;
+    /delete-property/ max_frame_time;
+};
+&irblaster { status = "disabled"; };

@@ -8,6 +8,7 @@ amlogic-reset
 amlogic-rng
 amlogic-power
 amlogic-usb
+pwrseq_emmc
 amlogic-mmc
 dwmac-meson8b
 stmmac

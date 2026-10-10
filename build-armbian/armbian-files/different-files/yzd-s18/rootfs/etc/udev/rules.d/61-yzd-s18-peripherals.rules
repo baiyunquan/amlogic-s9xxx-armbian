@@ -1,0 +1,4 @@
+# Acceptance profile: keep the factory eMMC unmounted and read-only.
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="mmcblk*", TEST=="/sys/firmware/devicetree/base/yzd-s18,peripherals-profile", ENV{UDISKS_IGNORE}="1", ENV{UDISKS_AUTO}="0"
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="mmcblk*", ENV{DEVTYPE}=="disk", TEST=="/sys/firmware/devicetree/base/yzd-s18,peripherals-profile", RUN+="/sbin/blockdev --setro /dev/%k"
+ACTION=="add", SUBSYSTEM=="lirc", KERNEL=="lirc[0-9]*", DRIVERS=="meson-ir", SYMLINK+="lirc-yzd-s18"

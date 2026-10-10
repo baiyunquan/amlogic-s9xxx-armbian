@@ -75,11 +75,12 @@ backup(){
   say "backup=$dir"
 }
 make_dtb(){
-  local r=$1 s o; need fdtput
-  s=$(find "$r/boot/dtb/amlogic" -type f -name '*video.dtb' -print -quit); [[ -n "$s" ]] || die 'video DTB missing'
-  o="$r/boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-emmc.dtb"; cp -f "$s" "$o"
-  fdtput -t s "$o" /emmc@ffe07000 status okay; fdtput -t s "$o" /sdio@ffe03000 status disabled
-  [[ "$(fdtget -t s "$o" /emmc@ffe07000 status)" == okay ]] || die 'eMMC DTB update failed'
+  local r=$1 o; need fdtget
+  o="$r/boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-emmc.dtb"
+  [[ -s "$o" ]] || die 'source-compiled eMMC companion DTB missing'
+  [[ "$(fdtget -t s "$o" /emmc@ffe07000 status)" == okay ]] || die 'eMMC controller disabled'
+  [[ "$(fdtget -t i "$o" /emmc@ffe07000 bus-width)" == 8 ]] || die 'eMMC bus-width missing'
+  [[ "$(fdtget -t s "$o" /emmc@ffe07000 pinctrl-names)" == 'default clk-gate' ]] || die 'eMMC pinctrl missing'
 }
 copy_system(){
   local m=$1 u r; u=$(blkid -s UUID -o value "$DATA_PART"); [[ "$u" =~ ^[0-9a-f-]{36}$ ]] || die 'bad ext4 UUID'
@@ -120,6 +121,7 @@ dry(){
   say "DRY-RUN OK target=$TARGET data=$DATA_PART env=$ENV_OFFSET/$ENV_SIZE"; say 'No block device was written.'
 }
 install_image(){
+  [[ ! -e /sys/firmware/devicetree/base/yzd-s18,peripherals-profile ]] || die 'peripherals acceptance profile keeps eMMC read-only; installation is not enabled'
   [[ "$YES" == 1 ]] || die 'install requires --yes'; TARGET=$(discover) || die 'eMMC not visible; boot eMMC-enabled DTB first'
   [[ "$(rootdisk || :)" != "$TARGET" ]] || die 'target is current root disk'; DATA_PART=$(data_part "$TARGET"); check_layout "$TARGET"; envcfg "$TARGET"; backup "$TARGET"
   trap cleanup EXIT; mkfs.ext4 -F -q -O '^64bit,^metadata_csum,^orphan_file' -L ROOTFS_EMMC "$DATA_PART"

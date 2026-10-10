@@ -6,6 +6,7 @@ from pathlib import Path
 import struct
 import subprocess
 from inputs import RELEASE, sha
+from verify_peripherals import verify as verify_peripherals
 
 def call(args):
     return subprocess.check_output([str(x) for x in args], text=True).strip()
@@ -17,13 +18,18 @@ def kernel(root):
     for name, digest in data["files"].items():
         assert sha(root/name) == digest, name
     modules = sorted((root/"modules").rglob("*.ko"))
-    assert len(modules) == 1512, len(modules)
+    assert len(modules) == 1514, len(modules)
+    mmc_module=next((root/"modules").rglob("amlogic-mmc.ko"))
+    assert b"amlogic,skip-dtbkey-init\x00" in mmc_module.read_bytes()
+    assert any(file.name=="meson-ir.ko" for file in modules)
+    assert any(file.name=="pwrseq_emmc.ko" for file in modules)
     for file in modules:
         with file.open("rb") as f:
             header=f.read(20)
         assert header[:4] == b"\x7fELF" and struct.unpack_from("<H", header, 18)[0] == 183, str(file)
         assert call(["modinfo", "-F", "vermagic", file]).startswith(RELEASE+" "), str(file)
-    dtb=root/"boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-usbfix-video.dtb"
+    dtb=root/"boot/dtb/amlogic/zh_s905x3_4g_rgmii-yzd-s18-peripherals-peripherals.dtb"
+    verify_peripherals(dtb, root/f"config-{RELEASE}")
     def prop(node, name, kind="s"):
         return call(["fdtget","-t",kind,dtb,node,name])
     def sym(label):
@@ -90,6 +96,10 @@ def rootfs(root):
     assert emmc_dtb.is_file()
     assert call(["fdtget","-t","s",emmc_dtb,"/emmc@ffe07000","status"]) == "okay"
     assert call(["fdtget","-t","s",emmc_dtb,"/sdio@ffe03000","status"]) == "disabled"
+    verify_peripherals(emmc_dtb, boot/f"config-{RELEASE}")
+    rules=(root/"etc/udev/rules.d/61-yzd-s18-peripherals.rules").read_text()
+    assert 'UDISKS_IGNORE' in rules and 'blockdev --setro' in rules
+    assert 'lirc-yzd-s18' in rules
     assert len(list(boot.glob("Image-*")))==1
     assert not list(boot.glob("*ophub*"))
     assert sha(root/"usr/lib/firmware/video/video_ucode.bin")=="80522fd7376bde74be185e822c314f9beddee0264279bb4538d104588f46b094"

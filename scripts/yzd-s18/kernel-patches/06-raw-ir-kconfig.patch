@@ -1,0 +1,13 @@
+diff --git a/drivers/media/rc/Kconfig b/drivers/media/rc/Kconfig
+index fd5a7a058..50573c1ee 100644
+--- a/drivers/media/rc/Kconfig
++++ b/drivers/media/rc/Kconfig
+@@ -238,7 +238,7 @@ config IR_FINTEK
+ 
+ config IR_MESON
+ 	tristate "Amlogic Meson IR remote receiver"
+-	depends on ARCH_MESON || COMPILE_TEST
++	depends on ARCH_MESON || AMLOGIC_DRIVER || COMPILE_TEST
+ 	help
+ 	   Say Y if you want to use the IR remote receiver available
+ 	   on Amlogic Meson SoCs.

@@ -1,0 +1,17 @@
+diff --git a/drivers/mmc/host/meson-gx-mmc.c b/drivers/mmc/host/meson-gx-mmc.c
+index 11cc60e..aacaacd 100644
+--- a/drivers/mmc/host/meson-gx-mmc.c
++++ b/drivers/mmc/host/meson-gx-mmc.c
+@@ -4163,7 +4163,11 @@ static int meson_mmc_probe(struct platform_device *pdev)
+ 		sdio_host = mmc;
+ 	}
+ 
+-	if (aml_card_type_mmc(host)) {
++	/* USB-root acceptance must not repair factory key/DTB reserved areas.
++	 * This board opt-out leaves legacy users of the storage API unchanged.
++	 */
++	if (aml_card_type_mmc(host) &&
++	    !device_property_read_bool(&pdev->dev, "amlogic,skip-dtbkey-init")) {
+ 		INIT_DELAYED_WORK(&host->dtbkey, add_dtbkey);
+ 		schedule_delayed_work(&host->dtbkey, 50);
+ 	}
