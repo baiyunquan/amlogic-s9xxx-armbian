@@ -1,5 +1,18 @@
 # YZD-S18 eMMC and raw IR USB profile — 2026-10-10
 
+- [Published image and reports](https://github.com/baiyunquan/amlogic-s9xxx-armbian/releases/tag/yzd-s18-bookworm-20261010-b7e67e8f-6)
+- [Successful ARM64 workflow](https://github.com/baiyunquan/amlogic-s9xxx-armbian/actions/runs/38039693786)
+- Image SHA256: `8d97c096d7d23db87ab765b8cada18011b0c5e229c84218d8e31f1867f46e887`
+
+Published validation/identity/partition/input reports were downloaded and
+matched the pinned peripherals release, v2 inputs and expected USB layout.
+The new image itself has not been flashed or hardware-booted in this round.
+The bundle's selected full profile is
+`zh_s905x3_4g_rgmii-yzd-s18-peripherals-peripherals.dtb`; the shorter
+`...-yzd-s18-peripherals.dtb` in that bundle is the compute-only variant.
+On the existing USB the selected full DTB was deployed under the shorter
+`...-yzd-s18-peripherals.dtb` name, as recorded in its uEnv configuration.
+
 The source-compiled `5.15.137-yzd-s18-peripherals` was booted through UART
 on the existing USB Bookworm installation. This round did not run
 armbian-install, format eMMC, write its partition table, or save U-Boot env.
