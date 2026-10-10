@@ -81,15 +81,16 @@ cannot replace it with a status-only copy of the old video DTB.
 ```sh
 ir-ctl -d /dev/lirc-yzd-s18 --features
 timeout 20 ir-ctl -d /dev/lirc-yzd-s18 --receive=/var/tmp/ir.raw --mode2
-# Point the AC remote at the receiver and press once during the 20-second window.
+# Point an ordinary remote at the receiver and press during the window.
 cat /var/tmp/ir.raw
 ```
 
 Timeout exit 124 is normal for a bounded capture. The follow-up physical
 capture passed; raw events and decoded NEC frame counts are recorded in
 `logs/peripherals/ir-recapture.raw` and `ir-recapture-result.json` in the
-porting workspace. The local Meidi-IR-ZZU parser
-can consume LIRC MODE2 data; no AC daemon or IR transmission was started here.
+porting workspace. The user confirmed this was an ordinary remote, not a Midea AC remote.
+The capture accepts physical raw reception and NEC frames; it does not establish
+a specific remote brand or AC protocol. No AC daemon or IR transmission was started.
 
 The existing USB now defaults to the peripherals config and preserves
 `/boot/uEnv.usbfix.txt`. To restore the previous kernel on the USB root:

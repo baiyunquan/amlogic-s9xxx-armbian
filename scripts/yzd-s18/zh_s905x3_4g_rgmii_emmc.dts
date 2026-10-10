@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/* Installed eMMC root: retain peripheral bindings and reserved-area opt-out.
+ * The acceptance-only udev rule must not force the running root read-only.
+ */
+#include "zh_s905x3_4g_rgmii_peripherals.dts"
+/ {
+    model = "YZD-S18 / PP-Link S21 (S905X3 eMMC root raw IR)";
+    /delete-property/ yzd-s18,peripherals-profile;
+    yzd-s18,emmc-profile;
+};
